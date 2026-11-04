@@ -86,20 +86,25 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
-          SOCKS5_PROXY: ${{ secrets.SOCKS5_PROXY }}
-          PENNY_LOG_LEVEL: ${{ secrets.PENNY_LOG_LEVEL }}
-          PENNY_LOG_CONTENT: ${{ secrets.PENNY_LOG_CONTENT }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          SOCKS5_PROXY: ${{ vars.SOCKS5_PROXY }}
+          PENNY_LOG_LEVEL: ${{ vars.PENNY_LOG_LEVEL }}
+          PENNY_LOG_CONTENT: ${{ vars.PENNY_LOG_CONTENT }}
           PENNY_STORES_CONFIG_JSON: ${{ secrets.PENNY_STORES_CONFIG_JSON }}
           IMAGE: ${{ steps.image.outputs.name }}:${{ env.SOURCE_SHA }}
         run: |
           set -euo pipefail
           umask 077
           for name in CI_DEPLOY_SSH_KEY K3S_HOST TELEGRAM_BOT_TOKEN \
-            ALLOWED_USER_IDS DEEPSEEK_API_KEY DEEPSEEK_MODEL SOCKS5_PROXY \
-            PENNY_LOG_LEVEL PENNY_LOG_CONTENT PENNY_STORES_CONFIG_JSON; do
+            ALLOWED_USER_IDS DEEPSEEK_API_KEY PENNY_STORES_CONFIG_JSON; do
             if test -z "${!name}"; then
               echo "Missing production secret: $name" >&2
+              exit 1
+            fi
+          done
+          for name in DEEPSEEK_MODEL SOCKS5_PROXY PENNY_LOG_LEVEL PENNY_LOG_CONTENT; do
+            if test -z "${!name}"; then
+              echo "Missing production variable: $name" >&2
               exit 1
             fi
           done

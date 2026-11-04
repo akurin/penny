@@ -50,7 +50,7 @@ build `deploy/Dockerfile`, push
 create the namespace and both Kubernetes Secrets, apply the manifests and wait for
 the rollout.
 
-Configure the `production` environment secrets used by that workflow:
+Configure these under **Settings → Environments → production** in GitHub:
 
 | Secret | Purpose |
 |---|---|
@@ -60,14 +60,19 @@ Configure the `production` environment secrets used by that workflow:
 | `TELEGRAM_BOT_TOKEN` | bot token |
 | `ALLOWED_USER_IDS` | comma-separated numeric IDs |
 | `DEEPSEEK_API_KEY` | model key |
-| `DEEPSEEK_MODEL` | model name, e.g. `deepseek-flash` |
-| `SOCKS5_PROXY` | proxy reachable **from the laptop** (Mac LAN address, not `host.internal`) |
-| `PENNY_LOG_LEVEL` | log level, e.g. `INFO` or `DEBUG` |
-| `PENNY_LOG_CONTENT` | `0` normally; `1` logs private shopping conversations |
 | `PENNY_STORES_CONFIG_JSON` | entire contents of the local `config/stores.local.json` file, pasted as one multiline secret |
 
-Set these under the repository's **Settings → Environments → production →
-Environment secrets**. The workflow validates the JSON and creates/updates
+| Environment variable | Purpose |
+|---|---|
+| `DEEPSEEK_MODEL` | model name, e.g. `deepseek-flash` |
+| `SOCKS5_PROXY` | credential-free proxy address reachable **from the laptop** (Mac LAN address, not `host.internal`) |
+| `PENNY_LOG_LEVEL` | log level, e.g. `INFO` or `DEBUG` |
+| `PENNY_LOG_CONTENT` | `0` normally; `1` logs private shopping conversations |
+
+Use **Environment secrets** for the first table and **Environment variables**
+for the second. If the proxy URL ever contains a username or password, move
+`SOCKS5_PROXY` back to an Environment secret and update the workflow reference.
+The workflow validates the JSON and creates/updates
 `penny-stores` from it. Keep the file out of Git; the pod mounts the resulting
 Secret at `/app/config/stores.local.json`. The workflow also creates/updates
 `penny-env` for the environment variables. The pod manifest no longer overrides
