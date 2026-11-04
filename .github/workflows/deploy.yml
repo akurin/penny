@@ -86,10 +86,25 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
           SOCKS5_PROXY: ${{ secrets.SOCKS5_PROXY }}
+          PENNY_LOG_LEVEL: ${{ secrets.PENNY_LOG_LEVEL }}
+          PENNY_LOG_CONTENT: ${{ secrets.PENNY_LOG_CONTENT }}
+          PENNY_STORES_CONFIG_JSON: ${{ secrets.PENNY_STORES_CONFIG_JSON }}
           IMAGE: ${{ steps.image.outputs.name }}:${{ env.SOURCE_SHA }}
         run: |
           set -euo pipefail
+          umask 077
+          for name in CI_DEPLOY_SSH_KEY K3S_HOST TELEGRAM_BOT_TOKEN \
+            ALLOWED_USER_IDS DEEPSEEK_API_KEY DEEPSEEK_MODEL SOCKS5_PROXY \
+            PENNY_LOG_LEVEL PENNY_LOG_CONTENT PENNY_STORES_CONFIG_JSON; do
+            if test -z "${!name}"; then
+              echo "Missing production secret: $name" >&2
+              exit 1
+            fi
+          done
+          printf '%s' "$PENNY_STORES_CONFIG_JSON" > "$RUNNER_TEMP/stores.local.json"
+          python3 -m json.tool "$RUNNER_TEMP/stores.local.json" > /dev/null
           echo "$CI_DEPLOY_SSH_KEY" > /tmp/ci_deploy_key
           chmod 600 /tmp/ci_deploy_key
           ssh -o StrictHostKeyChecking=accept-new -i /tmp/ci_deploy_key \
@@ -103,7 +118,13 @@ jobs:
             --from-literal=TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
             --from-literal=ALLOWED_USER_IDS="$ALLOWED_USER_IDS" \
             --from-literal=DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" \
+            --from-literal=DEEPSEEK_MODEL="$DEEPSEEK_MODEL" \
             --from-literal=SOCKS5_PROXY="$SOCKS5_PROXY" \
+            --from-literal=PENNY_LOG_LEVEL="$PENNY_LOG_LEVEL" \
+            --from-literal=PENNY_LOG_CONTENT="$PENNY_LOG_CONTENT" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n penny create secret generic penny-stores \
+            --from-file=stores.local.json="$RUNNER_TEMP/stores.local.json" \
             --dry-run=client -o yaml | kubectl apply -f -
 
           sed "s|image: penny:latest|image: $IMAGE|" deploy/k8s/penny.yaml | kubectl apply -f -

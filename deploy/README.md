@@ -43,10 +43,11 @@ or run the laptop as its own single-node k3s instead.
 
 ## 2. GitHub Actions deploy
 
-`.github/workflows/deploy.yml` runs on every push to `master` (and manually via
-`workflow_dispatch`): tests, build `deploy/Dockerfile`, push
+`.github/workflows/deploy.yml` runs after a successful `Tests` workflow on a
+push to `master` (or manually via `workflow_dispatch`, which runs its own checks):
+build `deploy/Dockerfile`, push
 `ghcr.io/<owner>/penny:<sha>` to GHCR, then over the same SSH tunnel as inbucket
-create the namespace and `penny-env` Secret, apply the manifests and wait for
+create the namespace and both Kubernetes Secrets, apply the manifests and wait for
 the rollout.
 
 Configure the `production` environment secrets used by that workflow:
@@ -59,7 +60,18 @@ Configure the `production` environment secrets used by that workflow:
 | `TELEGRAM_BOT_TOKEN` | bot token |
 | `ALLOWED_USER_IDS` | comma-separated numeric IDs |
 | `DEEPSEEK_API_KEY` | model key |
+| `DEEPSEEK_MODEL` | model name, e.g. `deepseek-flash` |
 | `SOCKS5_PROXY` | proxy reachable **from the laptop** (Mac LAN address, not `host.internal`) |
+| `PENNY_LOG_LEVEL` | log level, e.g. `INFO` or `DEBUG` |
+| `PENNY_LOG_CONTENT` | `0` normally; `1` logs private shopping conversations |
+| `PENNY_STORES_CONFIG_JSON` | entire contents of the local `config/stores.local.json` file, pasted as one multiline secret |
+
+Set these under the repository's **Settings → Environments → production →
+Environment secrets**. The workflow validates the JSON and creates/updates
+`penny-stores` from it. Keep the file out of Git; the pod mounts the resulting
+Secret at `/app/config/stores.local.json`. The workflow also creates/updates
+`penny-env` for the environment variables. The pod manifest no longer overrides
+the configured log level or content setting.
 
 The GHCR package must be pullable by the node. The image contains no secrets, so
 making the package public is the simplest option; otherwise create a pull secret
@@ -73,19 +85,8 @@ kubectl -n penny create secret docker-registry ghcr-pull \
 Do **not** set `PENNY_BROWSER_HEADLESS`: the code needs 5ka in plain headless
 and Lenta in the virtual/WebGL mode.
 
-Branch addresses and store codes are **not** GitHub secrets — they never leave
-this machine. Create the `penny-stores` Secret from the gitignored local config;
-the manifest mounts it at `/app/config`:
-
-```sh
-kubectl create namespace penny   # if it does not exist yet
-kubectl -n penny create secret generic penny-stores \
-  --from-file=stores.local.json=config/stores.local.json
-```
-
-The mount is optional so the pod can start without it, but until it exists the
-HTTP stores fail closed (no wrong-branch prices). The CI does not touch this
-Secret.
+For a manual deploy without GitHub Actions, the commands below still create
+the same Kubernetes Secrets from local files.
 
 ## 3. Manual fallback
 

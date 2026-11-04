@@ -79,10 +79,6 @@ spec:
             # Logs go to stdout; k3s/containerd keeps and rotates them.
             - name: PENNY_LOG_FILE
               value: ""
-            - name: PENNY_LOG_LEVEL
-              value: "INFO"
-            - name: PENNY_LOG_CONTENT
-              value: "0"
             - name: PENNY_STORE_DEADLINE
               value: "30"
             - name: PENNY_WATCH_INTERVAL
