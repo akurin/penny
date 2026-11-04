@@ -64,10 +64,10 @@ Configure these under **Settings → Environments → production** in GitHub:
 
 | Environment variable | Purpose |
 |---|---|
-| `DEEPSEEK_MODEL` | model name, e.g. `deepseek-flash` |
-| `SOCKS5_PROXY` | credential-free proxy address reachable **from the laptop** (Mac LAN address, not `host.internal`) |
-| `PENNY_LOG_LEVEL` | log level, e.g. `INFO` or `DEBUG` |
-| `PENNY_LOG_CONTENT` | `0` normally; `1` logs private shopping conversations |
+| `DEEPSEEK_MODEL` | optional; defaults to `deepseek-flash` |
+| `SOCKS5_PROXY` | required; credential-free proxy address reachable **from the laptop** (Mac LAN address, not `host.internal`) |
+| `PENNY_LOG_LEVEL` | optional; defaults to `INFO` |
+| `PENNY_LOG_CONTENT` | optional; defaults to `0`; `1` logs private shopping conversations |
 
 Use **Environment secrets** for the first table and **Environment variables**
 for the second. If the proxy URL ever contains a username or password, move

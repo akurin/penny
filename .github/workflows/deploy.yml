@@ -86,10 +86,10 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-flash' }}
           SOCKS5_PROXY: ${{ vars.SOCKS5_PROXY }}
-          PENNY_LOG_LEVEL: ${{ vars.PENNY_LOG_LEVEL }}
-          PENNY_LOG_CONTENT: ${{ vars.PENNY_LOG_CONTENT }}
+          PENNY_LOG_LEVEL: ${{ vars.PENNY_LOG_LEVEL || 'INFO' }}
+          PENNY_LOG_CONTENT: ${{ vars.PENNY_LOG_CONTENT || '0' }}
           PENNY_STORES_CONFIG_JSON: ${{ secrets.PENNY_STORES_CONFIG_JSON }}
           IMAGE: ${{ steps.image.outputs.name }}:${{ env.SOURCE_SHA }}
         run: |
@@ -102,12 +102,10 @@ jobs:
               exit 1
             fi
           done
-          for name in DEEPSEEK_MODEL SOCKS5_PROXY PENNY_LOG_LEVEL PENNY_LOG_CONTENT; do
-            if test -z "${!name}"; then
-              echo "Missing production variable: $name" >&2
-              exit 1
-            fi
-          done
+          if test -z "$SOCKS5_PROXY"; then
+            echo "Missing production variable: SOCKS5_PROXY" >&2
+            exit 1
+          fi
           printf '%s' "$PENNY_STORES_CONFIG_JSON" > "$RUNNER_TEMP/stores.local.json"
           python3 -m json.tool "$RUNNER_TEMP/stores.local.json" > /dev/null
           echo "$CI_DEPLOY_SSH_KEY" > /tmp/ci_deploy_key
