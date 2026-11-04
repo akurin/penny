@@ -1,0 +1,125 @@
+# Penny on k3s. Apply after labelling the laptop node:
+#   kubectl label node <laptop> penny.io/workload=bot
+#   # optional, to reserve the node for Penny:
+#   kubectl taint node <laptop> penny.io/dedicated=bot:NoSchedule
+# and after creating the `penny-env` Secret (see secret.example.yaml).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: penny
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: penny-data
+  namespace: penny
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: penny-state
+  namespace: penny
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penny
+  namespace: penny
+  labels:
+    app: penny
+spec:
+  # Telegram long polling allows exactly one poller; Recreate avoids overlap
+  # during an update.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: penny
+  template:
+    metadata:
+      labels:
+        app: penny
+    spec:
+      terminationGracePeriodSeconds: 10
+      # The laptop sits on the home LAN next to the residential proxy. Host
+      # networking keeps that proxy reachable and avoids depending on the
+      # flannel overlay through NAT. Penny opens no ports.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        penny.io/workload: bot
+      # Uncomment together with the taint when the node is dedicated:
+      # tolerations:
+      #   - key: penny.io/dedicated
+      #     operator: Equal
+      #     value: bot
+      #     effect: NoSchedule
+      # If the GHCR package is private, create a pull secret and uncomment:
+      # imagePullSecrets:
+      #   - name: ghcr-pull
+      containers:
+        - name: penny
+          image: penny:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: penny-env
+          env:
+            # Logs go to stdout; k3s/containerd keeps and rotates them.
+            - name: PENNY_LOG_FILE
+              value: ""
+            - name: PENNY_LOG_LEVEL
+              value: "INFO"
+            - name: PENNY_LOG_CONTENT
+              value: "0"
+            - name: PENNY_STORE_DEADLINE
+              value: "30"
+            - name: PENNY_WATCH_INTERVAL
+              value: "10800"
+            - name: PENNY_WATCH_START_DELAY
+              value: "300"
+            - name: PENNY_WATCH_LIMIT
+              value: "20"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2
+              memory: 3Gi
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+            - name: data
+              mountPath: /app/data
+            - name: state
+              mountPath: /app/state
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        # Branch addresses/codes; created locally, never in GitHub or the image.
+        - name: config
+          secret:
+            secretName: penny-stores
+            optional: true
+        - name: data
+          persistentVolumeClaim:
+            claimName: penny-data
+        - name: state
+          persistentVolumeClaim:
+            claimName: penny-state
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi

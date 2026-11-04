@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+.venv-*
+__pycache__
+*.pyc
+*.egg-info
+.env
+.env.*
+logs
+state
+config
+data/penny.sqlite3*
+data/5ka_store.json
+tests
+README.md

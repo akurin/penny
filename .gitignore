@@ -1,0 +1,15 @@
+.env
+.venv/
+.venv-*/
+__pycache__/
+*.egg-info/
+*.sqlite*
+logs/
+*.log
+*.log.*
+state/
+
+# Location-specific branch config (addresses, store codes, verification tokens)
+config/stores.local.json
+# Legacy local store file, no longer read
+data/5ka_store.json

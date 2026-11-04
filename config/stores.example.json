@@ -1,0 +1,29 @@
+{
+  "_comment": "Copy to config/stores.local.json (gitignored) and fill in your branch. The bot verifies the branch the store returns against these tokens before showing prices.",
+  "cosmetic": {
+    "store": "<store code>",
+    "address": "<city, street building>",
+    "verify": ["<street token>", "<building token>"]
+  },
+  "magnit": {
+    "store": "<store code>",
+    "address": "<city, street building>",
+    "verify": ["<street token>", "<building token>"]
+  },
+  "dixy": {
+    "store": "<store code>",
+    "address": "<city, street building>",
+    "verify": ["<street token>", "<building token>"]
+  },
+  "5ka": {
+    "store": "<sap code>",
+    "address": "<city, street building>",
+    "verify": []
+  },
+  "lenta": {
+    "store": "<delivery store id>",
+    "alias": "<catalogue alias>",
+    "address": "<city, street building>",
+    "verify": []
+  }
+}

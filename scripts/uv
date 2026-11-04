@@ -1,0 +1,15 @@
+#!/bin/sh
+# Keep platform-specific interpreters and native wheels out of each other's way.
+set -eu
+cd "$(dirname "$0")/.."
+case "$(uname -s)" in
+  Darwin) penny_os=macos ;;
+  Linux) penny_os=linux ;;
+  *) echo 'Supported platforms: macOS and Linux.' >&2; exit 1 ;;
+esac
+export UV_PROJECT_ENVIRONMENT="$PWD/.venv-$penny_os-$(uname -m)"
+if ! command -v uv >/dev/null 2>&1; then
+  echo 'Install uv first: https://docs.astral.sh/uv/getting-started/installation/' >&2
+  exit 1
+fi
+exec uv "$@"

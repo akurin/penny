@@ -1,0 +1,168 @@
+# Penny on k3s
+
+Penny runs as a single pod on the spare laptop, joined to the existing k3s
+cluster and deployed the same way as inbucket: GitHub Actions builds the image,
+opens an SSH tunnel to the k3s API and applies the manifests. There is no
+Service or Ingress — Telegram long polling needs no HTTP entry, so cert-manager
+and Traefik are not involved.
+
+## 1. Join and mark the laptop
+
+On the server, read the join token:
+
+```sh
+sudo cat /var/lib/rancher/k3s/server/node-token
+```
+
+On the laptop:
+
+```sh
+curl -sfL https://get.k3s.io | \
+  K3S_URL=https://<server>:6443 K3S_TOKEN=<node-token> sh -
+```
+
+Then mark it; a label selects the node, a taint reserves it:
+
+```sh
+kubectl get nodes -o wide
+kubectl label node <laptop> penny.io/workload=bot
+# optional: keep other workloads off the laptop
+kubectl taint node <laptop> penny.io/dedicated=bot:NoSchedule
+```
+
+`deploy/k8s/penny.yaml` already has `nodeSelector: penny.io/workload: bot`;
+uncomment the toleration if you added the taint.
+
+**Networking caveat.** The agent connects outbound to the server, but k3s's
+default flannel overlay needs UDP 8472 between nodes. A home laptop behind NAT
+can join and still be `Ready`, but cross-node pod traffic may fail. Penny uses
+`hostNetwork: true` (it opens no ports and only needs outbound access to
+Telegram, DeepSeek and the proxy), so the bot itself does not depend on the
+overlay. If the node never becomes `Ready`, put the nodes on WireGuard/Tailscale
+or run the laptop as its own single-node k3s instead.
+
+## 2. GitHub Actions deploy
+
+`.github/workflows/deploy.yml` runs on every push to `master` (and manually via
+`workflow_dispatch`): tests, build `deploy/Dockerfile`, push
+`ghcr.io/<owner>/penny:<sha>` to GHCR, then over the same SSH tunnel as inbucket
+create the namespace and `penny-env` Secret, apply the manifests and wait for
+the rollout.
+
+Configure the `production` environment secrets used by that workflow:
+
+| Secret | Purpose |
+|---|---|
+| `KUBECONFIG` | points at `https://127.0.0.1:6443`; the tunnel maps that port to the k3s API |
+| `CI_DEPLOY_SSH_KEY` | key for the `ci-deploy` SSH account |
+| `K3S_HOST` | SSH host reachable from GitHub |
+| `TELEGRAM_BOT_TOKEN` | bot token |
+| `ALLOWED_USER_IDS` | comma-separated numeric IDs |
+| `DEEPSEEK_API_KEY` | model key |
+| `SOCKS5_PROXY` | proxy reachable **from the laptop** (Mac LAN address, not `host.internal`) |
+
+The GHCR package must be pullable by the node. The image contains no secrets, so
+making the package public is the simplest option; otherwise create a pull secret
+and uncomment `imagePullSecrets` in the manifest:
+
+```sh
+kubectl -n penny create secret docker-registry ghcr-pull \
+  --docker-server=ghcr.io --docker-username=<user> --docker-password=<PAT>
+```
+
+Do **not** set `PENNY_BROWSER_HEADLESS`: the code needs 5ka in plain headless
+and Lenta in the virtual/WebGL mode.
+
+Branch addresses and store codes are **not** GitHub secrets — they never leave
+this machine. Create the `penny-stores` Secret from the gitignored local config;
+the manifest mounts it at `/app/config`:
+
+```sh
+kubectl create namespace penny   # if it does not exist yet
+kubectl -n penny create secret generic penny-stores \
+  --from-file=stores.local.json=config/stores.local.json
+```
+
+The mount is optional so the pod can start without it, but until it exists the
+HTTP stores fail closed (no wrong-branch prices). The CI does not touch this
+Secret.
+
+## 3. Manual fallback
+
+Without CI, build on the laptop (so the Camoufox download matches its arch) and
+import the image into k3s's containerd:
+
+```sh
+docker build -t penny:latest -f deploy/Dockerfile .
+docker save penny:latest | sudo k3s ctr images import -
+sudo k3s ctr images ls | grep penny
+```
+
+Then create the secrets from a container-specific env file and the local branch
+config, and apply:
+
+```sh
+kubectl create namespace penny
+kubectl -n penny create secret generic penny-env --from-env-file=.env
+kubectl -n penny create secret generic penny-stores \
+  --from-file=stores.local.json=config/stores.local.json
+kubectl apply -f deploy/k8s/penny.yaml
+kubectl -n penny rollout status deployment/penny
+```
+
+`deploy/k8s/secret.example.yaml` lists the expected env keys;
+`config/stores.example.json` shows the branch config shape.
+
+## 4. First start: cookies and history
+
+The bot starts even with empty volumes; only cookie-backed stores degrade until
+the files are copied. Copy them once, then restart:
+
+```sh
+POD=$(kubectl -n penny get pod -l app=penny -o jsonpath='{.items[0].metadata.name}')
+kubectl cp state/. penny/$POD:/app/state/
+kubectl cp data/penny.sqlite3 penny/$POD:/app/data/penny.sqlite3
+kubectl -n penny rollout restart deployment/penny
+```
+
+Keep exactly **one replica** — Telegram long polling allows a single poller.
+
+## 5. Laptop hygiene
+
+A suspended laptop kills the bot. Disable sleep and lid handling:
+
+```sh
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+# /etc/systemd/logind.conf: HandleLidSwitch=ignore HandleLidSwitchExternalPower=ignore
+sudo systemctl restart systemd-logind
+```
+
+The `data` and `state` PVCs use `local-path`, so they are tied to this node. If
+the laptop is replaced, copy the PV data before deleting it.
+
+## 6. Updates and backups
+
+CI redeploys on every push. For a manual update, rebuild/import and
+`kubectl -n penny rollout restart deployment/penny`. Watch the logs with:
+
+```sh
+kubectl -n penny logs -f deployment/penny
+```
+
+Back up the database with SQLite's online backup (safe while running) and copy
+the file out; `state/` contains session cookies and should be treated as a
+secret:
+
+```sh
+POD=$(kubectl -n penny get pod -l app=penny -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n penny $POD -- /app/.venv/bin/python -c \
+  "import sqlite3; sqlite3.connect('/app/data/penny.sqlite3').backup(sqlite3.connect('/app/data/backup.sqlite3'))"
+kubectl cp penny/$POD:/app/data/backup.sqlite3 penny-backup-$(date +%F).sqlite3
+```
+
+## Resources
+
+Requests are 500m CPU / 1Gi and limits 2 CPU / 3Gi; two Camoufox instances plus
+k3s and the OS fit comfortably in 16 GB. The container runs as root because the
+Camoufox cache and local-path volumes are root-owned; add
+`runAsUser`/`fsGroup` if you want to harden it.

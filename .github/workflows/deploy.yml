@@ -1,0 +1,111 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: penny-deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.6"
+      - run: ./scripts/uv sync --locked
+      - run: ./scripts/uv run --locked ruff check penny tests
+      - run: ./scripts/uv run --locked python -m unittest discover -s tests
+
+  deploy:
+    needs: test
+    if: >-
+      ${{
+        always() && ((github.event_name == 'workflow_run' &&
+         github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.head_branch == 'master') ||
+        (github.event_name == 'workflow_dispatch' && needs.test.result == 'success'))
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: Image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/penny" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ env.SOURCE_SHA }}
+            ${{ steps.image.outputs.name }}:latest
+
+      - uses: azure/setup-kubectl@c0c8b32d33a5244f1e5947304550403b63930415 # v4
+        with:
+          version: latest
+
+      - uses: Azure/k8s-set-context@4334b489abaae3336d9b19d15d53ad72412ec412 # v5
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+
+      # Same pattern as the inbucket deploy: the kubeconfig points at
+      # 127.0.0.1:6443 and an SSH tunnel carries it to the k3s API.
+      - name: Deploy to Kubernetes
+        env:
+          CI_DEPLOY_SSH_KEY: ${{ secrets.CI_DEPLOY_SSH_KEY }}
+          K3S_HOST: ${{ secrets.K3S_HOST }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          SOCKS5_PROXY: ${{ secrets.SOCKS5_PROXY }}
+          IMAGE: ${{ steps.image.outputs.name }}:${{ env.SOURCE_SHA }}
+        run: |
+          set -euo pipefail
+          echo "$CI_DEPLOY_SSH_KEY" > /tmp/ci_deploy_key
+          chmod 600 /tmp/ci_deploy_key
+          ssh -o StrictHostKeyChecking=accept-new -i /tmp/ci_deploy_key \
+            -L 6443:127.0.0.1:6443 -N "ci-deploy@$K3S_HOST" &
+          SSH_PID=$!
+          trap 'kill $SSH_PID 2>/dev/null || true' EXIT
+          sleep 2
+
+          kubectl create namespace penny --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n penny create secret generic penny-env \
+            --from-literal=TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
+            --from-literal=ALLOWED_USER_IDS="$ALLOWED_USER_IDS" \
+            --from-literal=DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" \
+            --from-literal=SOCKS5_PROXY="$SOCKS5_PROXY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          sed "s|image: penny:latest|image: $IMAGE|" deploy/k8s/penny.yaml | kubectl apply -f -
+          kubectl -n penny rollout restart deployment/penny
+          kubectl -n penny rollout status deployment/penny --timeout=300s
