@@ -15,19 +15,19 @@ STORES_CONFIG_PATH = os.environ.get("PENNY_STORES_CONFIG") or os.path.join(
 SITES = {
     "cosmetic": {"base": "https://cosmetic.magnit.ru", "store": "",
                  "name": "М.Косметик", "address": "",
-                 "adult": False, "cookies": False, "verify": []},
+                 "adult": False, "verify": []},
     "magnit": {"base": "https://magnit.ru", "store": "",
                "name": "Магнит", "address": "",
-               "adult": True, "cookies": True, "verify": []},
+               "adult": True, "verify": []},
     "dixy": {"base": "https://dixy.ru", "store": "",
              "name": "Дикси", "address": "",
-             "adult": False, "cookies": True, "verify": []},
+             "adult": False, "verify": []},
     "5ka": {"base": "https://5ka.ru", "store": "",
             "name": "Пятёрочка", "address": "",
-            "adult": False, "cookies": False, "browser": True, "verify": []},
+            "adult": False, "browser": True, "verify": []},
     "lenta": {"base": "https://lenta.com", "store": "", "alias": "",
               "name": "Лента", "address": "",
-              "adult": False, "cookies": True, "browser": True, "verify": []},
+              "adult": False, "browser": True, "verify": []},
 }
 
 
