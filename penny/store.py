@@ -263,16 +263,30 @@ def dixy_search(query, proxy, sort="popularity", state_path=None):
             if alt not in schemes:
                 schemes.append(alt)
     last_exc = None
-    for scheme in schemes:
+    for attempt in range(2):
         try:
-            return _dixy_fetch(requests, path, scheme, query)
-        except (BranchVerificationError, StateError, CaptchaBlocked):
-            raise
-        except Exception as exc:
-            last_exc = exc
-            if scheme != schemes[-1]:
-                event("store_http", site="dixy", operation="dns_fallback")
-    raise last_exc
+            for scheme in schemes:
+                try:
+                    return _dixy_fetch(requests, path, scheme, query)
+                except (BranchVerificationError, StateError, CaptchaBlocked):
+                    raise
+                except Exception as exc:
+                    last_exc = exc
+                    if scheme != schemes[-1]:
+                        event("store_http", site="dixy", operation="dns_fallback")
+            raise last_exc
+        except (BranchVerificationError, StateError) as exc:
+            if attempt:
+                raise
+            # No session, or one pinned to another branch: choose the configured
+            # store in the browser once, then retry the same lookup.
+            try:
+                from .dixy_session import select_store
+                select_store(proxy, path, SITES["dixy"].get("address"))
+            except Exception as select_exc:
+                event("store_session_select_failed", site="dixy",
+                      error=type(select_exc).__name__)
+                raise exc from None
 
 
 def is_dixy_block_page(response):
