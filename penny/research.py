@@ -151,7 +151,10 @@ async def research(model, query, original_request, proxy, lookup=None, sort="pop
     primary_ok = set(results[0].keys())
     primary_seconds = time.monotonic() - started
     time_exhausted = False
-    slow_primary = primary_seconds > 20.0
+    # Follow-ups only re-query the fast HTTP stores, so they need a few seconds,
+    # not a fixed 20s guard: that guard cut them off whenever a browser store was
+    # slow, even with most of the budget still unused.
+    slow_primary = primary_seconds > STORE_DEADLINE_S - 10.0
     try:
         first_products = []
         for site in DEFAULT_SITES:
