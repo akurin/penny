@@ -114,6 +114,19 @@ def _verify_http(proxy, state_path):
         return None
 
 
+async def _confirm_state(proxy, state_path):
+    """Check the saved cookies over the HTTP transport and clear the cooldown.
+
+    Every path that saves a state must do this: "the browser sees the site" and
+    "the HTTP transport works" are different questions, and a stale cooldown
+    would hide a working store for half an hour."""
+    reset_site_cooldown("dixy")
+    products = await asyncio.to_thread(_verify_http, proxy, state_path)
+    if products is None:
+        pause_site("dixy", VERIFY_PAUSE_S)
+    return products
+
+
 async def unblock(proxy, state_path, send_image, get_answer, notify):
     """Run the captcha relay; returns (English result code, Russian chat message).
 
@@ -131,8 +144,12 @@ async def unblock(proxy, state_path, send_image, get_answer, notify):
             await page.wait_for_timeout(1500)
             if await page.title() != "403":
                 await _save_state(context, state_path)
-                event("dixy_captcha", result="already_allowed")
-                return "already_allowed", "Дикси уже отвечает — капча не понадобилась."
+                products = await _confirm_state(proxy, state_path)
+                event("dixy_captcha", result="already_allowed", verified=products is not None)
+                if products is not None:
+                    return "already_allowed", "Дикси уже отвечает — капча не понадобилась."
+                return ("state_saved", "Сессия Дикси сохранена, но обычные запросы пока "
+                                       "не проходят — попробуйте запрос через пару минут.")
             clicked = False
             for frame in _widget_frames(page, "checkbox"):
                 button = await frame.query_selector(".CaptchaButton")
@@ -147,8 +164,12 @@ async def unblock(proxy, state_path, send_image, get_answer, notify):
             await page.wait_for_timeout(1500)
             if await page.title() != "403":
                 await _save_state(context, state_path)
-                event("dixy_captcha", result="checkbox_passed")
-                return "checkbox_passed", "Капча пройдена одним нажатием — Дикси разблокирован."
+                products = await _confirm_state(proxy, state_path)
+                event("dixy_captcha", result="checkbox_passed", verified=products is not None)
+                if products is not None:
+                    return "checkbox_passed", "Капча пройдена одним нажатием — Дикси разблокирован."
+                return ("state_saved", "Сессия Дикси сохранена, но обычные запросы пока "
+                                       "не проходят — попробуйте запрос через пару минут.")
             thumb = await _wait_for(lambda: _find_thumb(page), CHALLENGE_TIMEOUT_S)
             if not thumb:
                 return ("no_slider", "Капча не показала ползунок — разблокируйте на Mac: "
@@ -159,8 +180,12 @@ async def unblock(proxy, state_path, send_image, get_answer, notify):
             if not challenge:
                 if await page.title() != "403":
                     await _save_state(context, state_path)
-                    event("dixy_captcha", result="slider_passed")
-                    return "slider_passed", "Капча пройдена ползунком — Дикси разблокирован."
+                    products = await _confirm_state(proxy, state_path)
+                    event("dixy_captcha", result="slider_passed", verified=products is not None)
+                    if products is not None:
+                        return "slider_passed", "Капча пройдена ползунком — Дикси разблокирован."
+                    return ("state_saved", "Сессия Дикси сохранена, но обычные запросы пока "
+                                           "не проходят — попробуйте запрос через пару минут.")
                 return ("no_challenge", "Капча не показала картинку — разблокируйте на Mac: "
                                         "python -m penny.dixy_unblock.")
             for attempt in range(1, ANSWER_TRIES + 1):

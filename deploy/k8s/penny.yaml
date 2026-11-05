@@ -77,7 +77,7 @@ spec:
             - name: PENNY_LOG_FILE
               value: ""
             - name: PENNY_STORE_DEADLINE
-              value: "30"
+              value: "60"
             - name: PENNY_WATCH_INTERVAL
               value: "10800"
             - name: PENNY_WATCH_START_DELAY

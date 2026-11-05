@@ -210,7 +210,7 @@ def _deadline(max_seconds):
     return min(own, shared) if shared is not None else own
 
 
-def _timeout_ms(deadline, cap_seconds=15):
+def _timeout_ms(deadline, cap_seconds=20):
     remaining = deadline - time.time()
     if remaining <= 0:
         raise TimeoutError("browser round deadline exceeded")
@@ -240,7 +240,7 @@ def _evaluate_retrying(page, script, arg, deadline_ts, step_ms=1000):
     return result
 
 
-FIVEKA_DEADLINE_S = 12  # the ServicePipe challenge settles in ~2 s; a stuck
+FIVEKA_DEADLINE_S = 25  # the ServicePipe challenge settles in ~2 s; a stuck
                         # fetch must not eat the whole round (lenta and the
                         # follow-up queries wait behind it on the one thread)
 
@@ -415,7 +415,7 @@ def lenta_browser_search(query, proxy=None):
         browser = get_browser("lenta")
         context = _context(browser, "lenta")
         try:
-            deadline = _deadline(30)
+            deadline = _deadline(45)
             page = context.new_page()
             page.goto("https://lenta.com/search/" + quote(query) + "/",
                       wait_until="domcontentloaded", timeout=_timeout_ms(deadline))
