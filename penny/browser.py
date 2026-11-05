@@ -416,27 +416,44 @@ def lenta_browser_search(query, proxy=None):
         # fresh page per query: reusing a finished page aborts the next goto.
         context = _persistent_context(browser, "lenta")
         page = context.new_page()
+        started = time.time()
         try:
             deadline = _deadline(45)
             page.goto("https://lenta.com/search/" + quote(query) + "/",
                       wait_until="domcontentloaded", timeout=_timeout_ms(deadline))
             data = token = device = domain = None
+            last_error = None
+            clearance_logged = False
             while time.time() < deadline:
                 cookies = {c["name"]: c["value"] for c in context.cookies("https://lenta.com")}
                 token = cookies.get("Utk_SessionToken")
                 if token:
                     device = cookies.get("Utk_DvcGuid", "")
                     domain = cookies.get("App_Cache_CitySlug", "moscow")
+                    if not clearance_logged:
+                        clearance_logged = True
+                        event("lenta_clearance", seconds=round(time.time() - started, 1),
+                              city=domain)
                     try:
                         data = _lenta_search(page, token, device, domain, query,
                                              deadline=deadline)
                         break
-                    except ValueError:
+                    except ValueError as exc:
+                        status = getattr(exc, "http_status", None)
+                        current = (type(exc).__name__, status)
+                        if current != last_error:
+                            last_error = current
+                            event("lenta_search_retry", error=current[0],
+                                  http_status=status,
+                                  seconds=round(time.time() - started, 1))
                         page.wait_for_timeout(400)
                 else:
                     page.wait_for_timeout(400)
             if data is None:
                 _drop_context("lenta")  # the cached clearance is stale
+                event("lenta_failed", token=bool(token),
+                      http_status=(last_error[1] if last_error else None),
+                      seconds=round(time.time() - started, 1))
                 raise ValueError("Lenta search never succeeded (challenge or block)")
             store_id = _lenta_store_id()
             try:

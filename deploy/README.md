@@ -24,18 +24,20 @@ Then label it; an optional taint reserves it for Penny:
 
 ```sh
 kubectl get nodes -o wide
-kubectl label node <node> penny.io/workload=bot
+kubectl label node <node> homelab.morjoff.com/workload=home
 # optional: keep other workloads off the node
-kubectl taint node <node> penny.io/dedicated=bot:NoSchedule
+kubectl taint node <node> dedicated=home:NoSchedule
 ```
 
 **Networking caveat.** The agent connects outbound to the server, but k3s's
 default flannel overlay needs UDP 8472 between nodes. A NAT'd node can join and
-still be `Ready`, but cross-node pod traffic may fail. Penny uses
-`hostNetwork: true` (it opens no ports and only needs outbound access to
-Telegram, DeepSeek and the proxy), so the bot itself does not depend on the
-overlay. If the node never becomes `Ready`, put the nodes on WireGuard/Tailscale
-or run it as its own single-node cluster instead.
+still be `Ready`, but cross-node pod traffic may fail. Penny uses the normal pod
+network: it opens no ports and only needs outbound access to Telegram, DeepSeek
+and the proxy, so it must stay pinned to the node that can reach those endpoints.
+Its DNS is pinned to the LAN resolver because the node's `/etc/resolv.conf`
+points at systemd-resolved's `127.0.0.53` stub. If the node never becomes
+`Ready`, put the nodes on WireGuard/Tailscale or run it as its own single-node
+cluster instead.
 
 ## 2. GitHub Actions deploy
 
@@ -64,8 +66,8 @@ Configure these under **Settings → Environments → production** in GitHub:
 | `TELEGRAM_PROXY` | optional; SOCKS5 proxy for Bot API calls, when `api.telegram.org` is filtered from the node |
 | `PENNY_LOG_LEVEL` | optional; defaults to `INFO` |
 | `PENNY_LOG_CONTENT` | optional; defaults to `0`; `1` logs private shopping conversations |
-| `PENNY_NODE_SELECTOR` | required; `key=value` node label that selects the node, e.g. `penny.io/workload=bot` |
-| `PENNY_TOLERATION` | optional; `key=value:effect` toleration for a tainted (reserved) node, e.g. `penny.io/dedicated=bot:NoSchedule` |
+| `PENNY_NODE_SELECTOR` | required; `key=value` node label that selects the node, e.g. `homelab.morjoff.com/workload=home` |
+| `PENNY_TOLERATION` | optional; `key=value:effect` toleration for a tainted (reserved) node, e.g. `dedicated=home:NoSchedule` |
 
 Use **Environment secrets** for the first table and **Environment variables**
 for the second. If the proxy URL ever contains a username or password, move
