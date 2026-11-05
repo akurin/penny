@@ -1,7 +1,7 @@
 """End-to-end live regression: real stores + real DeepSeek, no Telegram.
 
-Run: SOCKS5_PROXY=... python -m tests.live_e2e
-Skips (with OK-skip) when SOCKS5_PROXY or DEEPSEEK_API_KEY is missing, so CI
+Run: STORE_PROXY=... python -m tests.live_e2e
+Skips (with OK-skip) when STORE_PROXY or DEEPSEEK_API_KEY is missing, so CI
 and dry machines do not spend money or hit the network.
 """
 import asyncio
@@ -211,10 +211,10 @@ GROUND_TRUTH = [
 
 async def main():
     load_dotenv(".env")
-    proxy = os.environ.get("SOCKS5_PROXY")
+    proxy = os.environ.get("STORE_PROXY")
     key = os.environ.get("DEEPSEEK_API_KEY")
     if not proxy or not key:
-        print("SKIP: SOCKS5_PROXY / DEEPSEEK_API_KEY missing")
+        print("SKIP: STORE_PROXY / DEEPSEEK_API_KEY missing")
         return 0
     model = Model(key, os.environ.get("DEEPSEEK_MODEL", "deepseek-flash"))
     results = await asyncio.gather(

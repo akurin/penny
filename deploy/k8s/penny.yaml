@@ -1,8 +1,6 @@
-# Penny on k3s. Apply after labelling the laptop node:
-#   kubectl label node <laptop> penny.io/workload=bot
-#   # optional, to reserve the node for Penny:
-#   kubectl taint node <laptop> penny.io/dedicated=bot:NoSchedule
-# and after creating the `penny-env` Secret (see secret.example.yaml).
+# Penny's workload. The deploy step renders placement from PENNY_NODE_SELECTOR
+# (key=value) and PENNY_TOLERATION (key=value:effect) into nodeSelector and
+# tolerations, and creates the Secrets (see secret.example.yaml).
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -52,19 +50,17 @@ spec:
         app: penny
     spec:
       terminationGracePeriodSeconds: 10
-      # The laptop sits on the home LAN next to the residential proxy. Host
-      # networking keeps that proxy reachable and avoids depending on the
-      # flannel overlay through NAT. Penny opens no ports.
+      # The store proxy is reachable from the node's own network, not through
+      # the pod overlay, so the container shares the host network namespace.
+      # Penny opens no ports.
       hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
-      nodeSelector:
-        penny.io/workload: bot
-      # Uncomment together with the taint when the node is dedicated:
-      # tolerations:
-      #   - key: penny.io/dedicated
-      #     operator: Equal
-      #     value: bot
-      #     effect: NoSchedule
+      # The bot needs no cluster names. Resolve through the node so DNS keeps working
+      # when CoreDNS (on the control plane, over the overlay) is unreachable.
+      dnsPolicy: Default
+      # Placement is filled in by the deploy step: labels select the node, tolerations let
+      # the pod run on a node that is tainted because it is reserved for this workload.
+      nodeSelector: {}
+      tolerations: []
       # If the GHCR package is private, create a pull secret and uncomment:
       # imagePullSecrets:
       #   - name: ghcr-pull
@@ -76,15 +72,11 @@ spec:
             - secretRef:
                 name: penny-env
           env:
-            # Logs go to stdout; k3s/containerd keeps and rotates them.
+            # Logs go to stdout; the container runtime keeps and rotates them.
             - name: PENNY_LOG_FILE
               value: ""
-            - name: PENNY_LOG_LEVEL
-              value: "INFO"
-            - name: PENNY_LOG_CONTENT
-              value: "0"
             - name: PENNY_STORE_DEADLINE
-              value: "30"
+              value: "60"
             - name: PENNY_WATCH_INTERVAL
               value: "10800"
             - name: PENNY_WATCH_START_DELAY
@@ -97,7 +89,9 @@ spec:
               memory: 1Gi
             limits:
               cpu: 2
-              memory: 3Gi
+              # Two warmed Camoufox instances idle at ~800Mi; a browser search on top
+              # of the app and the model call went past 3Gi and was OOMKilled.
+              memory: 6Gi
           volumeMounts:
             - name: config
               mountPath: /app/config

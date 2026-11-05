@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "penny-family"
 version = "0.1.0"
 requires-python = ">=3.13,<3.14"
-dependencies = ["aiogram>=3.20,<4", "curl-cffi>=0.11,<1", "httpx>=0.28,<1",
+dependencies = ["aiogram>=3.20,<4", "aiohttp-socks>=0.12,<1", "curl-cffi>=0.11,<1", "httpx>=0.28,<1",
                 "python-dotenv>=1,<2", "camoufox[geoip]>=0.5,<1"]
 
 [project.scripts]
@@ -16,7 +16,7 @@ penny = "penny.bot:main"
 include = ["penny*"]
 
 [tool.uv]
-environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+environments = ["sys_platform == 'linux'"]
 
 [dependency-groups]
 dev = [

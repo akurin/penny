@@ -28,7 +28,14 @@ STATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 
 _browsers = {}  # mode key -> (manager, browser): 5ka headless, Lenta virtual
 _site_contexts = {}  # site -> long-lived context (5ka keeps its clearance)
-_browser_lock = threading.Lock()  # playwright sync API is single-threaded
+# One lock per browser process. Playwright's sync API must be called from the
+# thread that owns the browser, and every headless mode owns one; a single
+# global lock also serialized 5ka and Lenta, which share nothing.
+_browser_locks = {key: threading.Lock() for key in ("headless", "virtual", "headed")}
+
+
+def _site_lock(site):
+    return _browser_locks[_browser_key(headless_mode(site))]
 # Playwright's sync API is bound to the thread that started it, and two sync
 # Camoufox instances cannot share one thread (the first leaves a running loop
 # behind). Each headless mode therefore gets its own single browser thread:
@@ -63,14 +70,13 @@ class BrowserUnavailable(RuntimeError):
 
 def headless_mode(site):
     """5ka needs plain headless (ServicePipe blocks the Xvfb mode); Lenta's
-    Qrator needs a real WebGL context: 'virtual' (Xvfb) on Linux, headed on
-    macOS. One browser process per mode serves that site."""
+    Qrator needs a real WebGL context, so it runs in the Xvfb "virtual" mode.
+    One browser process per mode serves that site."""
     override = os.getenv("PENNY_BROWSER_HEADLESS")
     if override in ("true", "false", "virtual"):
         return {"true": True, "false": False, "virtual": "virtual"}[override]
     if site == "lenta":
-        import platform
-        return "virtual" if platform.system() == "Linux" else False
+        return "virtual"
     return True
 
 
@@ -84,7 +90,7 @@ def _launch(mode=None):
     if mode is None:
         mode = shared_headless_mode()
     return Camoufox(headless=mode, os="macos", humanize=True, block_webrtc=True,
-                    geoip=True, proxy={"server": os.environ["SOCKS5_PROXY"]})
+                    geoip=True, proxy={"server": os.environ["STORE_PROXY"]})
 
 
 def get_browser(site):
@@ -203,7 +209,7 @@ def _deadline(max_seconds):
     return min(own, shared) if shared is not None else own
 
 
-def _timeout_ms(deadline, cap_seconds=15):
+def _timeout_ms(deadline, cap_seconds=20):
     remaining = deadline - time.time()
     if remaining <= 0:
         raise TimeoutError("browser round deadline exceeded")
@@ -233,7 +239,7 @@ def _evaluate_retrying(page, script, arg, deadline_ts, step_ms=1000):
     return result
 
 
-FIVEKA_DEADLINE_S = 12  # the ServicePipe challenge settles in ~2 s; a stuck
+FIVEKA_DEADLINE_S = 25  # the ServicePipe challenge settles in ~2 s; a stuck
                         # fetch must not eat the whole round (lenta and the
                         # follow-up queries wait behind it on the one thread)
 
@@ -254,7 +260,7 @@ def fiveka_browser_search(query, proxy=None, store=None):
     bound to this browser, and a fresh challenge on every query is what got the
     exit rate-limited. The clearance cookies are written back to state/5ka.json
     for the next bot start."""
-    with _browser_lock:
+    with _site_lock("5ka"):
         browser = get_browser("5ka")
         context = _persistent_context(browser, "5ka")
         try:
@@ -404,12 +410,14 @@ def lenta_browser_search(query, proxy=None):
     """Lenta via the in-page gateway call; mirrors ../shopping/examples/lenta_search.py:
     the search doubles as the Qrator readiness probe, then the session is pinned
     to the configured pickup store before the final search."""
-    with _browser_lock:
+    with _site_lock("lenta"):
         browser = get_browser("lenta")
-        context = _context(browser, "lenta")
+        # Keep the context (Qrator's clearance is bound to its cookies) but use a
+        # fresh page per query: reusing a finished page aborts the next goto.
+        context = _persistent_context(browser, "lenta")
+        page = context.new_page()
         try:
-            deadline = _deadline(30)
-            page = context.new_page()
+            deadline = _deadline(45)
             page.goto("https://lenta.com/search/" + quote(query) + "/",
                       wait_until="domcontentloaded", timeout=_timeout_ms(deadline))
             data = token = device = domain = None
@@ -428,6 +436,7 @@ def lenta_browser_search(query, proxy=None):
                 else:
                     page.wait_for_timeout(400)
             if data is None:
+                _drop_context("lenta")  # the cached clearance is stale
                 raise ValueError("Lenta search never succeeded (challenge or block)")
             store_id = _lenta_store_id()
             try:
@@ -454,7 +463,7 @@ def lenta_browser_search(query, proxy=None):
                   store=data.get("items", [{}])[0].get("storeId") if data.get("items") else None)
             return result
         finally:
-            context.close()
+            page.close()  # the context stays for the next query
 
 
 def _lenta_alias_key(value):
@@ -481,7 +490,10 @@ def _lenta_set_store(page, token, device, domain, store_id, deadline=None):
     if not res or res["status"] != 200:
         status = res["status"] if res else None
         body = (res or {}).get("body") or ""
-        if status == 409 and "store not found" in body:
+        if status == 409 and "not found" in body.lower():
+            # Lenta renumbers pickup stores; the alias survives. The API words it
+            # as "Pickup store with id N not found", so match the tail, not the
+            # exact phrase.
             raise LentaStoreMoved(f"Lenta store switch HTTP {status} (store not found)",
                                   status)
         raise LentaError(f"Lenta store switch HTTP {status or 'no response'}", status)

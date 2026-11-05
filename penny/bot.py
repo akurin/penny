@@ -10,6 +10,7 @@ from html import escape
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, F
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.types import (Message, LinkPreviewOptions, BufferedInputFile,
                            BotCommand, InlineKeyboardButton, InlineKeyboardMarkup)
 from aiogram.exceptions import TelegramNetworkError
@@ -26,6 +27,23 @@ from .watches import send_drop_alert
 
 def allowed(user_id, chat_type, ids):
     return chat_type == "private" and user_id in ids
+
+
+def telegram_session():
+    """Send Bot API calls through TELEGRAM_PROXY when it is set.
+
+    aiogram's aiohttp session ignores HTTP(S)_PROXY, so the proxy has to be passed
+    explicitly. aiohttp-socks resolves api.telegram.org at the proxy, which keeps a
+    poisoned local answer from breaking the connection.
+    """
+    proxy = os.getenv("TELEGRAM_PROXY")
+    if not proxy:
+        return None
+    # aiohttp-socks only knows socks5:// and resolves at the proxy anyway, so a
+    # socks5h:// value written for the store side works here unchanged.
+    if proxy.startswith("socks5h://"):
+        proxy = "socks5://" + proxy[len("socks5h://"):]
+    return AiohttpSession(proxy=proxy)
 
 
 # Registered with Telegram so the commands are discoverable in the "/" menu.
@@ -227,7 +245,7 @@ async def run():
     ensure_ca_bundle()
     configure()
     event("stores_config", loaded=configured)
-    required = ("TELEGRAM_BOT_TOKEN", "ALLOWED_USER_IDS", "DEEPSEEK_API_KEY", "SOCKS5_PROXY")
+    required = ("TELEGRAM_BOT_TOKEN", "ALLOWED_USER_IDS", "DEEPSEEK_API_KEY", "STORE_PROXY")
     if any(not os.getenv(key) for key in required):
         raise SystemExit("Fill required settings in .env; see .env.example")
     ids = {int(value.strip()) for value in os.environ["ALLOWED_USER_IDS"].split(",")}
@@ -288,7 +306,7 @@ async def run():
                 async def notify(text):
                     await answer_with_retry(message.answer, text)
 
-                result_code, status = await unblock(os.environ["SOCKS5_PROXY"],
+                result_code, status = await unblock(os.environ["STORE_PROXY"],
                                                     DIXY_STATE_PATH, send_image,
                                                     get_answer, notify)
                 event("dixy_captcha_done", result=result_code)
@@ -583,7 +601,7 @@ async def run():
                 stage = "store"
                 with span("store"):
                     result = await research(model, query, intent.request,
-                                            os.environ["SOCKS5_PROXY"], sort=sort)
+                                            os.environ["STORE_PROXY"], sort=sort)
                 try:
                     memory.attach_history(result)  # before the insert below
                 except Exception as exc:
@@ -690,7 +708,7 @@ async def run():
         await show_history(callback.message, callback.from_user.id, index)
 
     try:
-        async with Bot(os.environ["TELEGRAM_BOT_TOKEN"]) as bot:
+        async with Bot(os.environ["TELEGRAM_BOT_TOKEN"], session=telegram_session()) as bot:
             bot.session.middleware(PollingHealth())
             await wait_for_telegram(bot)
             try:
@@ -710,7 +728,7 @@ async def run():
             if interval > 0:
                 from .watches import watch_loop
                 watch_task = asyncio.create_task(
-                    watch_loop(bot, memory, os.environ["SOCKS5_PROXY"], interval=interval))
+                    watch_loop(bot, memory, os.environ["STORE_PROXY"], interval=interval))
                 event("watch_loop_started", interval_seconds=interval)
             try:
                 await dispatcher.start_polling(bot, allowed_updates=["message", "callback_query"],

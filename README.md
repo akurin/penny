@@ -8,14 +8,15 @@ tokens) is deliberately **not** in the repository — it would reveal where the
 family lives. A local `config/stores.local.json` (gitignored; see
 `config/stores.example.json`) holds it, and the bot verifies the branch each
 store returns before showing prices. Without it, the HTTP stores fail closed
-rather than label another branch's prices. М.Косметик is cookie-less; Магнит and
-Дикси use session cookies from `state/{site}.json` (Playwright storage states,
-refreshed by the shopping login flows). Пятёрочка and Лента use
+rather than label another branch's prices. М.Косметик and Магнит are cookie-less
+HTTP calls — the webgate accepts anonymous callers, and the branch travels in the
+request body. Дикси uses session cookies from `state/dixy.json`, which the
+captcha flow creates. Пятёрочка and Лента use
 (ServicePipe/Qrator) and run through bounded Camoufox workers: one search at a
 time, one browser process per display mode on its own playwright thread.
 Пятёрочка runs in plain headless — ServicePipe's block page rejects the Xvfb
 «virtual» mode (verified 2026-10-31) — while Лента needs a real WebGL context:
-`headless="virtual"` (Xvfb) on Linux, a headed window on macOS.
+`headless="virtual"`, which needs Xvfb.
 `PENNY_BROWSER_HEADLESS` forces one mode for both, so override it only for
 experiments. Лента renumbers pickup store ids occasionally while catalogue
 aliases stay stable: if the configured id is rejected, the bot resolves the
@@ -33,12 +34,12 @@ answer. A human can unblock it from Telegram — the reply offers a «Пройт
 
 ## Run
 
-Use [uv](https://docs.astral.sh/uv/getting-started/installation/) on both
-macOS and Linux. On macOS you can install it with `brew install uv`.
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/). Penny targets
+Linux, both in the container and in development; the wrapper refuses other hosts.
 Python 3.13 is the supported runtime, recorded in `.python-version`; uv downloads
 it if necessary. `uv.lock` records exact dependency resolutions and belongs in Git.
 The browser stores need the Camoufox binary once: `./scripts/uv run --locked python -m camoufox fetch`
-(and `apt install xvfb` on a Linux server for Лента).
+(and `apt install xvfb` for Лента).
 
 From the project directory:
 
@@ -49,23 +50,22 @@ From the project directory:
 ```
 
 Keep an existing `.env`; do not overwrite it. The wrapper picks an environment
-by OS and architecture, such as `.venv-macos-arm64` or `.venv-linux-aarch64`.
-Use `./scripts/uv` instead of bare `uv` for this shared macOS/Orb checkout.
-Old `.venv` and `.venv-macos` directories are no longer used and may be removed
-manually once the new setup works. The VM’s old environment also contains the uv tool used for migration.
+by architecture, such as `.venv-linux-aarch64`, so
+use `./scripts/uv` rather than bare `uv`.
 Never copy an environment to another OS or machine: recreate it from the lockfile.
 Stop a running Penny with Ctrl+C: it prints that it is stopping and exits within
 two seconds even if a store lookup or browser search is in flight. A second
 Ctrl+C exits immediately instead of waiting for the grace period.
 
-The same commands work on the home server. The SOCKS proxy address must be
-reachable from the environment running Penny: `127.0.0.1` refers to that
-environment, not necessarily your Mac. Configuration and secrets stay local.
+The same commands work on any machine that stays up. The SOCKS proxy address
+must be reachable from the environment running Penny: `127.0.0.1` refers to that
+environment, not necessarily your local machine. Configuration and secrets stay
+local.
 
-To run Penny as a pod on a k3s node (for example a spare laptop joined to an
+To run Penny as a pod on a k3s node (for example a dedicated node joined to an
 existing cluster), see `deploy/README.md`: GitHub Actions builds the image and
-deploys over the same SSH tunnel as inbucket, with one replica, PVCs for `data/`
-and `state/`, and the node label/taint that pins it.
+deploys over an SSH tunnel, with one replica, PVCs for `data/` and `state/`, and
+the node label/taint that pins it.
 
 To deliberately update dependencies, run `./scripts/uv lock --upgrade`, then
 `./scripts/uv sync --locked`, run the tests, and review/commit `uv.lock`.
@@ -73,10 +73,13 @@ Normal runs use `--locked` so they fail rather than silently changing the lockfi
 
 Create a Telegram bot with BotFather and put its token in `.env`. Set
 ALLOWED_USER_IDS to your and your wife's numeric Telegram IDs (not usernames).
-Set DEEPSEEK_API_KEY and SOCKS5_PROXY. Never commit or share `.env`.
-The SOCKS proxy is used for store requests; Telegram and DeepSeek use the
-server's normal network connection. No incoming port is needed for polling.
-Keep the process running on your home server; only one polling instance per bot.
+Set DEEPSEEK_API_KEY and STORE_PROXY. Never commit or share `.env`.
+STORE_PROXY carries store requests (`socks5h` keeps DNS at the proxy). Telegram
+and DeepSeek use the normal network connection; set TELEGRAM_PROXY to send Bot
+API calls through a SOCKS5 proxy when `api.telegram.org` is filtered.
+No incoming port is needed for polling.
+Keep the process running on a machine that stays up; only one polling instance
+per bot.
 
 Send «Сколько стоит зубная нить Splat?» in a private chat. Expect matching
 products from the available stores with their prices, a store label per card, and a
@@ -107,8 +110,8 @@ across five stores. DeepSeek calls retry once on transient 422/429/5xx; the Dixy
 HTTP transport retries its own listing request. Price budgets
 («до 200 рублей») are parsed by the model and enforced in code: items above the
 budget never render. At startup Penny
-points curl_cffi at certifi's CA bundle (`CURL_CA_BUNDLE`): the macOS
-curl-impersonate build lacked the GlobalSign Root R46 used by Dixy since 2025.
+points curl_cffi at certifi's CA bundle (`CURL_CA_BUNDLE`): the bundled
+curl-impersonate build lacked the GlobalSign Root R46 that Dixy uses.
 No unbounded retries, paid web research, browser fallback, or arbitrary tools.
 One in-flight question per user, with a ten-second minimum interval.
 Telegram sends retry once on TelegramNetworkError (a 20-second blip used to
@@ -162,7 +165,7 @@ Product sizes appear in names when supplied; unambiguous unit prices are compare
 
 ## Verification
 
-CI runs Ruff and the offline tests on Linux and macOS. A successful `Tests`
+CI runs Ruff and the offline tests on Linux. A successful `Tests`
 run for a push to `master` triggers deployment of that exact commit; manual
 deployments run their own Linux checks first. Ruff is a locked development
 dependency, excluded from the production image.
@@ -198,9 +201,9 @@ Import helpers from their owning modules in new code. The previous imports from
 ./scripts/uv run --locked python -m unittest discover -s tests -v
 ```
 
-GitHub Actions runs these checks on macOS and Linux with Python 3.13.
+GitHub Actions runs these checks on Linux with Python 3.13.
 Tests use fixtures/mocks and do not spend money or contact stores. A real Telegram,
-DeepSeek and residential-proxy smoke test requires your local credentials.
+DeepSeek and proxy smoke test requires your local credentials.
 The async tests require local socket-pair writes: asyncio uses them to wake its
 event loop after a worker completes. A sandbox that denies those writes can make
 otherwise completed lookups wait until their deadline; run the offline tests with
@@ -222,7 +225,7 @@ Set `PENNY_DIALOGUE_ROUNDS=3` for repeated stability checks and
 ## Live end-to-end regression
 
 ```sh
-SOCKS5_PROXY=socks5h://127.0.0.1:10807 ./scripts/uv run --locked python -m tests.live_e2e
+STORE_PROXY=socks5h://127.0.0.1:10807 ./scripts/uv run --locked python -m tests.live_e2e
 ```
 
 Runs a set of real queries (unsupported, foreign store, brand-with-form-word,
@@ -231,7 +234,7 @@ bars) through the real stores and DeepSeek and checks invariants: query
 extraction, store grouping, footer subset, prices rendered by code, no filler
 phrases, per-section ascending price for cheapest requests. Costs a handful of
 DeepSeek calls and store requests; needs a proxy reachable from the running OS
-(the same SOCKS5_PROXY as the bot).
+(the same STORE_PROXY as the bot).
 
 ## Next agreed stages
 
@@ -258,19 +261,10 @@ Run this in the same OS and shell environment as the bot:
 
 It checks only the store via the configured proxy; it does not call DeepSeek or
 send Telegram messages. `transport_code=7` means a connection could not be
-established. If the proxy runs on your Mac, localhost works only when Penny also
-runs on the Mac; a VM needs an address reachable from inside that VM.
-Bot failures now print a safe stage/type/status summary in the terminal.
-
-For this Orb VM, the Mac's residential proxy is reachable at
-`host.internal:10807`. Override just that process without editing the shared `.env`:
-
-```sh
-SOCKS5_PROXY=socks5://host.internal:10807 ./scripts/uv run --locked penny
-```
-
-On macOS, keep the localhost proxy address in `.env`. Environment variables
-supplied on the command line take precedence over `.env`.
+established. The proxy address has to be reachable from wherever Penny runs: a
+localhost address works only on the same machine, a VM needs an address
+reachable from inside it. Environment variables supplied on the command line
+take precedence over `.env`.
 
 ## Unblock Дикси by hand
 
@@ -290,12 +284,12 @@ as `state/dixy.json.bak`), the cooldown is cleared, and Penny polls one real
 search until the HTTP transport answers. The edge allow applies asynchronously,
 so this can take up to a minute; if it still lags, the bot asks you to retry in
 a couple of minutes instead of hammering the store. If the widget never reaches
-the image challenge, the bot points you to the Mac helper.
+the image challenge, the bot points you to the helper that needs a display.
 
-**On the Mac (real display, same proxy exit):**
+**On a machine with a display (same proxy exit):**
 
 ```sh
-SOCKS5_PROXY=socks5://127.0.0.1:10807 ./scripts/uv run --locked python -m penny.dixy_unblock
+STORE_PROXY=socks5://127.0.0.1:10807 ./scripts/uv run --locked python -m penny.dixy_unblock
 ```
 
 The window opens Дикси through the proxy. Solve the captcha when it appears;

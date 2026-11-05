@@ -24,6 +24,7 @@ from .rendering import (money as money, product_line as product_line,
 STATE_PATH = os.environ.get("MAGNIT_STATE") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "state", "magnit.json")
 DIXY_STATE_PATH = os.path.join(os.path.dirname(STATE_PATH), "dixy.json")
+# Cookie pair the Magnit webgate expects from the HTTP transport.
 
 
 class BranchVerificationError(ValueError):
@@ -39,7 +40,7 @@ class ServiceBlocked(ValueError):
 
 
 class StateError(RuntimeError):
-    """Magnit session cookies are missing or stale; refresh state/magnit.json via the shopping login flow."""
+    """Dixy's session cookies are missing or stale; unblock it via /dixy_captcha."""
     pass
 
 
@@ -47,14 +48,14 @@ def ensure_ca_bundle():
     """Point curl_cffi at certifi's CA bundle.
 
     The curl-impersonate build bundled with curl_cffi can lag behind fresh
-    roots: Dixy moved to GlobalSign Root R46 and the macOS build failed
-    verification while Linux and macOS system curl passed. certifi ships with
-    httpx and contains the root. CURL_CA_BUNDLE set by the user wins."""
+    roots: Dixy moved to GlobalSign Root R46 and the bundled build failed
+    verification while the system curl passed. certifi ships with httpx and
+    contains the root. CURL_CA_BUNDLE set by the user wins."""
     import certifi
     os.environ.setdefault("CURL_CA_BUNDLE", certifi.where())
 
 
-def load_state(path, required=("__Host-mg_s", "__Secure-mg_r")):
+def load_state(path, required=("PHPSESSID",)):
     """Playwright storage_state with the session cookies for one site."""
     try:
         with open(path, encoding="utf-8") as file:
@@ -262,16 +263,30 @@ def dixy_search(query, proxy, sort="popularity", state_path=None):
             if alt not in schemes:
                 schemes.append(alt)
     last_exc = None
-    for scheme in schemes:
+    for attempt in range(2):
         try:
-            return _dixy_fetch(requests, path, scheme, query)
-        except (BranchVerificationError, StateError, CaptchaBlocked):
-            raise
-        except Exception as exc:
-            last_exc = exc
-            if scheme != schemes[-1]:
-                event("store_http", site="dixy", operation="dns_fallback")
-    raise last_exc
+            for scheme in schemes:
+                try:
+                    return _dixy_fetch(requests, path, scheme, query)
+                except (BranchVerificationError, StateError, CaptchaBlocked):
+                    raise
+                except Exception as exc:
+                    last_exc = exc
+                    if scheme != schemes[-1]:
+                        event("store_http", site="dixy", operation="dns_fallback")
+            raise last_exc
+        except (BranchVerificationError, StateError) as exc:
+            if attempt:
+                raise
+            # No session, or one pinned to another branch: choose the configured
+            # store in the browser once, then retry the same lookup.
+            try:
+                from .dixy_session import select_store
+                select_store(proxy, path, SITES["dixy"].get("address"))
+            except Exception as select_exc:
+                event("store_session_select_failed", site="dixy",
+                      error=type(select_exc).__name__)
+                raise exc from None
 
 
 def is_dixy_block_page(response):
@@ -324,20 +339,14 @@ def search(site, query, proxy, sort="popularity", state_path=None):
     from curl_cffi import requests
     headers = {"Accept": "application/json", "Content-Type": "application/json",
                "Referer": cfg["base"] + "/", "Origin": cfg["base"], "x-client-name": "magnit",
-               "x-magnit-bff": "1", "x-new-magnit": "true", "x-permissions-jwt": "true",
+               "x-magnit-bff": "1", "x-new-magnit": "true",
                "x-device-platform": "Web", "x-app-version": "0.0.0", "x-platform-version": "Mac Firefox 156"}
     order = ({"order": "asc", "type": "price"} if sort == "price_asc"
              else {"order": "desc", "type": "price"} if sort == "price_desc"
              else {"order": "desc", "type": "popularity"})
+    # The webgate accepts anonymous callers: the store code travels in the body,
+    # so no session, cookies or login are involved (verified live).
     with requests.Session(impersonate="firefox133", proxy=proxy, timeout=20) as session:
-        if cfg["cookies"]:
-            cookies = load_state(state_path or STATE_PATH)
-            for cookie in cookies:
-                session.cookies.set(cookie["name"], cookie["value"],
-                                    domain=".magnit.ru", path="/")
-            named = {c["name"]: c["value"] for c in cookies}
-            headers["x-device-id"] = named.get("mg_udi", "")
-            headers["x-device-tag"] = named.get("mg_ksid", "") + "_0"
         response = session.post(cfg["base"] + "/webgate/v1/stores-facade/store", headers=headers,
                                 json={"externalId": {"owner": "OWNER_MAGNIT", "storeCode": cfg["store"]}})
         event("store_http", site=site, operation="branch", status=response.status_code)

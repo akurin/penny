@@ -32,10 +32,17 @@ def note_for(site, exc):
     if isinstance(exc, ServiceBlocked):
         return (f"{SITE_NAMES[site]}: сайт временно блокирует запросы с этого "
                 "подключения — результаты неполные.")
+    if isinstance(exc, TimeoutError):
+        return (f"{SITE_NAMES[site]}: не успела проверить за отведённое время — "
+                "результаты неполные.")
     if isinstance(exc, StateError):
         if "капча" in str(exc):
             return f"{SITE_NAMES[site]}: {exc}."
-        return f"{SITE_NAMES[site]}: {exc} — обновите state/{site}.json (логин из проекта shopping)."
+        if site == "dixy":
+            # The bot creates this session itself when a human solves the captcha;
+            # pointing at another project's login flow sent people the wrong way.
+            return f"{SITE_NAMES[site]}: нет активной сессии — команда /dixy_captcha её создаст."
+        return f"{SITE_NAMES[site]}: {exc}."
     return f"{SITE_NAMES[site]}: проверка не удалась — результаты могут быть неполными."
 
 
@@ -123,7 +130,11 @@ async def research(model, query, original_request, proxy, lookup=None, sort="pop
                 failures.append((site, TimeoutError(f"{site} exceeded the round budget")))
         for site, exc in failures:
             failure(f"store_{site}", exc)
-            if isinstance(exc, ServiceBlocked):
+            if isinstance(exc, TimeoutError):
+                # Our own wall-clock budget, not the store's health: a cooldown
+                # here would hide a working store for ten minutes.
+                pass
+            elif isinstance(exc, ServiceBlocked):
                 # A WAF block page means the exit, not the query; don't retry soon.
                 pause_site(site, SERVICE_BLOCK_COOLDOWN_S)
             else:
@@ -140,7 +151,10 @@ async def research(model, query, original_request, proxy, lookup=None, sort="pop
     primary_ok = set(results[0].keys())
     primary_seconds = time.monotonic() - started
     time_exhausted = False
-    slow_primary = primary_seconds > 20.0
+    # Follow-ups only re-query the fast HTTP stores, so they need a few seconds,
+    # not a fixed 20s guard: that guard cut them off whenever a browser store was
+    # slow, even with most of the budget still unused.
+    slow_primary = primary_seconds > STORE_DEADLINE_S - 10.0
     try:
         first_products = []
         for site in DEFAULT_SITES:

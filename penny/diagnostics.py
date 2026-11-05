@@ -25,9 +25,9 @@ def main():
     configured = load_store_config(os.getenv("PENNY_STORES_CONFIG") or None)
     print(f"stores config: {'loaded' if configured else 'missing (stores fail closed)'}")
     ensure_ca_bundle()
-    proxy = os.getenv("SOCKS5_PROXY")
+    proxy = os.getenv("STORE_PROXY")
     if not proxy:
-        raise SystemExit("SOCKS5_PROXY is missing")
+        raise SystemExit("STORE_PROXY is missing")
     failures = 0
     try:
         for site in DEFAULT_SITES:
