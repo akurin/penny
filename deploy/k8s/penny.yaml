@@ -1,7 +1,8 @@
-# Penny on k3s. Placement is cluster-specific, so it is not hard-coded here: the deploy
-# step fills in `nodeSelector` and `tolerations` from PENNY_NODE_SELECTOR (key=value) and
-# PENNY_TOLERATION (key=value:effect), and creates the Secrets (see secret.example.yaml).
-# Without those values the pod stays Pending, which is the intended fail-safe.
+# Penny's workload. The deploy step renders placement from PENNY_NODE_SELECTOR
+# (key=value) and PENNY_TOLERATION (key=value:effect) into nodeSelector and
+# tolerations, and creates the Secrets (see secret.example.yaml). Without a
+# selector the pod stays Pending, so a missing value fails visibly instead of
+# picking a node.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -73,7 +74,7 @@ spec:
             - secretRef:
                 name: penny-env
           env:
-            # Logs go to stdout; k3s/containerd keeps and rotates them.
+            # Logs go to stdout; the container runtime keeps and rotates them.
             - name: PENNY_LOG_FILE
               value: ""
             - name: PENNY_STORE_DEADLINE
