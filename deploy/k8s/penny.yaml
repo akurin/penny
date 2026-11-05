@@ -90,7 +90,9 @@ spec:
               memory: 1Gi
             limits:
               cpu: 2
-              memory: 3Gi
+              # Two warmed Camoufox instances idle at ~800Mi; a browser search on top
+              # of the app and the model call went past 3Gi and was OOMKilled.
+              memory: 6Gi
           volumeMounts:
             - name: config
               mountPath: /app/config
