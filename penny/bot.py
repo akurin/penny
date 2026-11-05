@@ -37,7 +37,13 @@ def telegram_session():
     poisoned local answer from breaking the connection.
     """
     proxy = os.getenv("TELEGRAM_PROXY")
-    return AiohttpSession(proxy=proxy) if proxy else None
+    if not proxy:
+        return None
+    # aiohttp-socks only knows socks5:// and resolves at the proxy anyway, so a
+    # socks5h:// value written for the store side works here unchanged.
+    if proxy.startswith("socks5h://"):
+        proxy = "socks5://" + proxy[len("socks5h://"):]
+    return AiohttpSession(proxy=proxy)
 
 
 # Registered with Telegram so the commands are discoverable in the "/" menu.
