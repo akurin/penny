@@ -142,7 +142,22 @@ kubectl -n penny rollout restart deployment/penny
 
 Keep exactly **one replica** — Telegram long polling allows a single poller.
 
-## 5. Laptop hygiene
+## 5. Exercise the bot without Telegram
+
+Agents (and you) can run one request through the real pipeline — intent
+parsing, the store round, the selection model and rendering — without sending
+anything to the chat:
+
+```sh
+kubectl -n penny exec deploy/penny -- /app/.venv/bin/python -m penny.simulate "хлеб"
+```
+
+It prints the parsed intent, per-store candidate counts, the notes that would
+appear in the reply, and the rendered answer. The environment is inherited from
+the container's own process, so it uses the same proxy, DeepSeek key and store
+config; nothing is written to Telegram or to the price history.
+
+## 6. Laptop hygiene
 
 A suspended laptop kills the bot. Disable sleep and lid handling:
 
@@ -155,7 +170,7 @@ sudo systemctl restart systemd-logind
 The `data` and `state` PVCs use `local-path`, so they are tied to this node. If
 the laptop is replaced, copy the PV data before deleting it.
 
-## 6. Updates and backups
+## 7. Updates and backups
 
 CI redeploys on every push. For a manual update, rebuild/import and
 `kubectl -n penny rollout restart deployment/penny`. Watch the logs with:
