@@ -481,7 +481,10 @@ def _lenta_set_store(page, token, device, domain, store_id, deadline=None):
     if not res or res["status"] != 200:
         status = res["status"] if res else None
         body = (res or {}).get("body") or ""
-        if status == 409 and "store not found" in body:
+        if status == 409 and "not found" in body.lower():
+            # Lenta renumbers pickup stores; the alias survives. The API words it
+            # as "Pickup store with id N not found", so match the tail, not the
+            # exact phrase.
             raise LentaStoreMoved(f"Lenta store switch HTTP {status} (store not found)",
                                   status)
         raise LentaError(f"Lenta store switch HTTP {status or 'no response'}", status)
