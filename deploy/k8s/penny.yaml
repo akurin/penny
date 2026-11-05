@@ -1,8 +1,6 @@
 # Penny's workload. The deploy step renders placement from PENNY_NODE_SELECTOR
 # (key=value) and PENNY_TOLERATION (key=value:effect) into nodeSelector and
-# tolerations, and creates the Secrets (see secret.example.yaml). Without a
-# selector the pod stays Pending, so a missing value fails visibly instead of
-# picking a node.
+# tolerations, and creates the Secrets (see secret.example.yaml).
 apiVersion: v1
 kind: Namespace
 metadata:
