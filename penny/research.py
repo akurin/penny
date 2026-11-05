@@ -35,7 +35,11 @@ def note_for(site, exc):
     if isinstance(exc, StateError):
         if "капча" in str(exc):
             return f"{SITE_NAMES[site]}: {exc}."
-        return f"{SITE_NAMES[site]}: {exc} — обновите state/{site}.json (логин из проекта shopping)."
+        if site == "dixy":
+            # The bot creates this session itself when a human solves the captcha;
+            # pointing at another project's login flow sent people the wrong way.
+            return f"{SITE_NAMES[site]}: нет активной сессии — команда /dixy_captcha её создаст."
+        return f"{SITE_NAMES[site]}: {exc}."
     return f"{SITE_NAMES[site]}: проверка не удалась — результаты могут быть неполными."
 
 
