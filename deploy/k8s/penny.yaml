@@ -50,13 +50,15 @@ spec:
         app: penny
     spec:
       terminationGracePeriodSeconds: 10
-      # The store proxy is reachable from the node's own network, not through
-      # the pod overlay, so the container shares the host network namespace.
-      # Penny opens no ports.
-      hostNetwork: true
-      # The bot needs no cluster names. Resolve through the node so DNS keeps working
-      # when CoreDNS (on the control plane, over the overlay) is unreachable.
-      dnsPolicy: Default
+      # Penny uses the normal pod network: the store and Telegram proxies are
+      # explicit SOCKS endpoints, not host-network shortcuts. The pod opens no
+      # ports.
+      # The node resolver is a systemd-resolved stub (127.0.0.53), which would
+      # point at the pod's own loopback, so use the LAN resolver explicitly.
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - 192.168.1.1
       # Placement is filled in by the deploy step: labels select the node, tolerations let
       # the pod run on a node that is tainted because it is reserved for this workload.
       nodeSelector: {}
