@@ -1,12 +1,11 @@
 # Penny on k3s
 
-Penny runs as a single pod on the spare laptop, joined to the existing k3s
-cluster and deployed the same way as inbucket: GitHub Actions builds the image,
-opens an SSH tunnel to the k3s API and applies the manifests. There is no
-Service or Ingress — Telegram long polling needs no HTTP entry, so cert-manager
-and Traefik are not involved.
+Penny runs as a single pod on a dedicated node joined to the k3s cluster: GitHub
+Actions builds the image, opens an SSH tunnel to the API and applies the
+manifests. There is no Service or Ingress — Telegram long polling needs no HTTP
+entry, so cert-manager and Traefik are not involved.
 
-## 1. Join and mark the laptop
+## 1. Join and mark the node
 
 On the server, read the join token:
 
@@ -14,7 +13,7 @@ On the server, read the join token:
 sudo cat /var/lib/rancher/k3s/server/node-token
 ```
 
-On the laptop:
+On the node:
 
 ```sh
 curl -sfL https://get.k3s.io | \
@@ -25,27 +24,26 @@ Then label it; an optional taint reserves it for Penny:
 
 ```sh
 kubectl get nodes -o wide
-kubectl label node <laptop> penny.io/workload=bot
-# optional: keep other workloads off the laptop
-kubectl taint node <laptop> penny.io/dedicated=bot:NoSchedule
+kubectl label node <node> penny.io/workload=bot
+# optional: keep other workloads off the node
+kubectl taint node <node> penny.io/dedicated=bot:NoSchedule
 ```
 
 **Networking caveat.** The agent connects outbound to the server, but k3s's
-default flannel overlay needs UDP 8472 between nodes. A home laptop behind NAT
-can join and still be `Ready`, but cross-node pod traffic may fail. Penny uses
+default flannel overlay needs UDP 8472 between nodes. A NAT'd node can join and
+still be `Ready`, but cross-node pod traffic may fail. Penny uses
 `hostNetwork: true` (it opens no ports and only needs outbound access to
 Telegram, DeepSeek and the proxy), so the bot itself does not depend on the
 overlay. If the node never becomes `Ready`, put the nodes on WireGuard/Tailscale
-or run the laptop as its own single-node k3s instead.
+or run it as its own single-node cluster instead.
 
 ## 2. GitHub Actions deploy
 
 `.github/workflows/deploy.yml` runs after a successful `Tests` workflow on a
 push to `master` (or manually via `workflow_dispatch`, which runs its own checks):
-build `deploy/Dockerfile`, push
-`ghcr.io/<owner>/penny:<sha>` to GHCR, then over the same SSH tunnel as inbucket
-create the namespace and both Kubernetes Secrets, apply the manifests and wait for
-the rollout.
+build `deploy/Dockerfile`, push `ghcr.io/<owner>/penny:<sha>` to GHCR, then over
+an SSH tunnel create the namespace and both Kubernetes Secrets, apply the
+manifests and wait for the rollout.
 
 Configure these under **Settings → Environments → production** in GitHub:
 
@@ -62,11 +60,11 @@ Configure these under **Settings → Environments → production** in GitHub:
 | Environment variable | Purpose |
 |---|---|
 | `DEEPSEEK_MODEL` | optional; defaults to `deepseek-flash` |
-| `STORE_PROXY` | required; credential-free SOCKS5 proxy for store requests, reachable **from the laptop** (`socks5h://` keeps DNS at the proxy) |
-| `TELEGRAM_PROXY` | optional; SOCKS5 proxy for Bot API calls, when `api.telegram.org` is filtered from the laptop |
+| `STORE_PROXY` | required; credential-free SOCKS5 proxy for store requests, reachable **from the node** (`socks5h://` keeps DNS at the proxy) |
+| `TELEGRAM_PROXY` | optional; SOCKS5 proxy for Bot API calls, when `api.telegram.org` is filtered from the node |
 | `PENNY_LOG_LEVEL` | optional; defaults to `INFO` |
 | `PENNY_LOG_CONTENT` | optional; defaults to `0`; `1` logs private shopping conversations |
-| `PENNY_NODE_SELECTOR` | required; `key=value` node label that selects the laptop, e.g. `penny.io/workload=bot` |
+| `PENNY_NODE_SELECTOR` | required; `key=value` node label that selects the node, e.g. `penny.io/workload=bot` |
 | `PENNY_TOLERATION` | optional; `key=value:effect` toleration for a tainted (reserved) node, e.g. `penny.io/dedicated=bot:NoSchedule` |
 
 Use **Environment secrets** for the first table and **Environment variables**
@@ -95,8 +93,8 @@ the same Kubernetes Secrets from local files.
 
 ## 3. Manual fallback
 
-Without CI, build on the laptop (so the Camoufox download matches its arch) and
-import the image into k3s's containerd:
+Without CI, build on the target machine (so the Camoufox download matches its
+architecture) and import the image into k3s's containerd:
 
 ```sh
 docker build -t penny:latest -f deploy/Dockerfile .
@@ -150,9 +148,9 @@ appear in the reply, and the rendered answer. The environment is inherited from
 the container's own process, so it uses the same proxy, DeepSeek key and store
 config; nothing is written to Telegram or to the price history.
 
-## 6. Laptop hygiene
+## 6. Node hygiene
 
-A suspended laptop kills the bot. Disable sleep and lid handling:
+A node that suspends kills the bot. Disable sleep and lid handling:
 
 ```sh
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
@@ -161,7 +159,7 @@ sudo systemctl restart systemd-logind
 ```
 
 The `data` and `state` PVCs use `local-path`, so they are tied to this node. If
-the laptop is replaced, copy the PV data before deleting it.
+the node is replaced, copy the PV data before deleting it.
 
 ## 7. Updates and backups
 

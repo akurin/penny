@@ -6,7 +6,7 @@ visual captcha and stays out of automation by design — a human solves it once
 here, the server-side allow lands on the session, and the regular HTTP
 transport (penny.store.dixy_search) keeps working with the refreshed cookies.
 
-Run this on a machine with a display (the Mac, not the headless VM):
+Run this on a machine with a display:
 
     STORE_PROXY=socks5://127.0.0.1:10807 ./scripts/uv run --locked python -m penny.dixy_unblock
 

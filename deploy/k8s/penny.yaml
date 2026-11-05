@@ -50,9 +50,9 @@ spec:
         app: penny
     spec:
       terminationGracePeriodSeconds: 10
-      # The laptop sits on the home LAN next to the residential proxy. Host
-      # networking keeps that proxy reachable and avoids depending on the
-      # flannel overlay through NAT. Penny opens no ports.
+      # The store proxy is reachable from the node's own network, not through
+      # the pod overlay, so the container shares the host network namespace.
+      # Penny opens no ports.
       hostNetwork: true
       # The bot needs no cluster names. Resolve through the node so DNS keeps working
       # when CoreDNS (on the control plane, over the overlay) is unreachable.

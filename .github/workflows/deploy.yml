@@ -77,8 +77,8 @@ jobs:
           method: kubeconfig
           kubeconfig: ${{ secrets.KUBECONFIG }}
 
-      # Same pattern as the inbucket deploy: the kubeconfig points at
-      # 127.0.0.1:6443 and an SSH tunnel carries it to the k3s API.
+      # The kubeconfig points at 127.0.0.1:6443; an SSH tunnel carries it to
+      # the API.
       - name: Deploy to Kubernetes
         env:
           CI_DEPLOY_SSH_KEY: ${{ secrets.CI_DEPLOY_SSH_KEY }}

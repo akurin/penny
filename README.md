@@ -50,23 +50,22 @@ From the project directory:
 ```
 
 Keep an existing `.env`; do not overwrite it. The wrapper picks an environment
-by OS and architecture, such as `.venv-macos-arm64` or `.venv-linux-aarch64`.
-Use `./scripts/uv` instead of bare `uv` for this shared macOS/Orb checkout.
-Old `.venv` and `.venv-macos` directories are no longer used and may be removed
-manually once the new setup works. The VM’s old environment also contains the uv tool used for migration.
+by OS and architecture, such as `.venv-macos-arm64` or `.venv-linux-aarch64`, so
+use `./scripts/uv` rather than bare `uv`.
 Never copy an environment to another OS or machine: recreate it from the lockfile.
 Stop a running Penny with Ctrl+C: it prints that it is stopping and exits within
 two seconds even if a store lookup or browser search is in flight. A second
 Ctrl+C exits immediately instead of waiting for the grace period.
 
-The same commands work on the home server. The SOCKS proxy address must be
-reachable from the environment running Penny: `127.0.0.1` refers to that
-environment, not necessarily your Mac. Configuration and secrets stay local.
+The same commands work on any machine that stays up. The SOCKS proxy address
+must be reachable from the environment running Penny: `127.0.0.1` refers to that
+environment, not necessarily your local machine. Configuration and secrets stay
+local.
 
-To run Penny as a pod on a k3s node (for example a spare laptop joined to an
+To run Penny as a pod on a k3s node (for example a dedicated node joined to an
 existing cluster), see `deploy/README.md`: GitHub Actions builds the image and
-deploys over the same SSH tunnel as inbucket, with one replica, PVCs for `data/`
-and `state/`, and the node label/taint that pins it.
+deploys over an SSH tunnel, with one replica, PVCs for `data/` and `state/`, and
+the node label/taint that pins it.
 
 To deliberately update dependencies, run `./scripts/uv lock --upgrade`, then
 `./scripts/uv sync --locked`, run the tests, and review/commit `uv.lock`.
@@ -79,7 +78,8 @@ STORE_PROXY carries store requests (`socks5h` keeps DNS at the proxy). Telegram
 and DeepSeek use the normal network connection; set TELEGRAM_PROXY to send Bot
 API calls through a SOCKS5 proxy when `api.telegram.org` is filtered.
 No incoming port is needed for polling.
-Keep the process running on your home server; only one polling instance per bot.
+Keep the process running on a machine that stays up; only one polling instance
+per bot.
 
 Send «Сколько стоит зубная нить Splat?» in a private chat. Expect matching
 products from the available stores with their prices, a store label per card, and a
@@ -201,9 +201,9 @@ Import helpers from their owning modules in new code. The previous imports from
 ./scripts/uv run --locked python -m unittest discover -s tests -v
 ```
 
-GitHub Actions runs these checks on macOS and Linux with Python 3.13.
+GitHub Actions runs these checks on Linux with Python 3.13.
 Tests use fixtures/mocks and do not spend money or contact stores. A real Telegram,
-DeepSeek and residential-proxy smoke test requires your local credentials.
+DeepSeek and proxy smoke test requires your local credentials.
 The async tests require local socket-pair writes: asyncio uses them to wake its
 event loop after a worker completes. A sandbox that denies those writes can make
 otherwise completed lookups wait until their deadline; run the offline tests with
@@ -284,9 +284,9 @@ as `state/dixy.json.bak`), the cooldown is cleared, and Penny polls one real
 search until the HTTP transport answers. The edge allow applies asynchronously,
 so this can take up to a minute; if it still lags, the bot asks you to retry in
 a couple of minutes instead of hammering the store. If the widget never reaches
-the image challenge, the bot points you to the Mac helper.
+the image challenge, the bot points you to the helper that needs a display.
 
-**On the Mac (real display, same proxy exit):**
+**On a machine with a display (same proxy exit):**
 
 ```sh
 STORE_PROXY=socks5://127.0.0.1:10807 ./scripts/uv run --locked python -m penny.dixy_unblock
