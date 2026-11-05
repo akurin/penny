@@ -4,8 +4,6 @@ permissions:
   contents: read
 jobs:
   test:
-    # Linux only: it is what the bot runs on, and the suite is pure Python, so a
-    # macOS runner adds no signal (the browser stores are exercised live, not here).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
