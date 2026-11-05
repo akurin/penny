@@ -8,9 +8,10 @@ tokens) is deliberately **not** in the repository — it would reveal where the
 family lives. A local `config/stores.local.json` (gitignored; see
 `config/stores.example.json`) holds it, and the bot verifies the branch each
 store returns before showing prices. Without it, the HTTP stores fail closed
-rather than label another branch's prices. М.Косметик is cookie-less; Магнит and
-Дикси use session cookies from `state/{site}.json` (Playwright storage states,
-refreshed by the shopping login flows). Пятёрочка and Лента use
+rather than label another branch's prices. М.Косметик and Магнит are cookie-less
+HTTP calls — the webgate accepts anonymous callers, and the branch travels in the
+request body. Дикси uses session cookies from `state/dixy.json`, which the
+captcha flow creates. Пятёрочка and Лента use
 (ServicePipe/Qrator) and run through bounded Camoufox workers: one search at a
 time, one browser process per display mode on its own playwright thread.
 Пятёрочка runs in plain headless — ServicePipe's block page rejects the Xvfb

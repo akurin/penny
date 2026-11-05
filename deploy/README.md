@@ -126,14 +126,16 @@ kubectl -n penny rollout status deployment/penny
 `deploy/k8s/secret.example.yaml` lists the expected env keys;
 `config/stores.example.json` shows the branch config shape.
 
-## 4. First start: cookies and history
+## 4. First start: history
 
-The bot starts even with empty volumes; only cookie-backed stores degrade until
-the files are copied. Copy them once, then restart:
+The bot starts with empty volumes and needs no session files: Магнит and
+М.Косметик call the webgate anonymously, Пятёрочка saves its own clearance to
+`/app/state/5ka.json`, and Дикси is unblocked from the chat with `/dixy_captcha`.
+
+Carry over the price history if you have one:
 
 ```sh
 POD=$(kubectl -n penny get pod -l app=penny -o jsonpath='{.items[0].metadata.name}')
-kubectl cp state/. penny/$POD:/app/state/
 kubectl cp data/penny.sqlite3 penny/$POD:/app/data/penny.sqlite3
 kubectl -n penny rollout restart deployment/penny
 ```
