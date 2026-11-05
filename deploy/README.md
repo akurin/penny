@@ -30,13 +30,6 @@ kubectl label node <laptop> penny.io/workload=bot
 kubectl taint node <laptop> penny.io/dedicated=bot:NoSchedule
 ```
 
-The manifest carries neither value, so a deployment can target a different
-cluster without editing YAML. The deploy step renders `nodeSelector` from
-`PENNY_NODE_SELECTOR` (`key=value`) and, when set, `tolerations` from
-`PENNY_TOLERATION` (`key=value:effect`). Without a selector the pod stays
-`Pending`, so a missing environment value fails visibly instead of landing on
-the wrong node.
-
 **Networking caveat.** The agent connects outbound to the server, but k3s's
 default flannel overlay needs UDP 8472 between nodes. A home laptop behind NAT
 can join and still be `Ready`, but cross-node pod traffic may fail. Penny uses
