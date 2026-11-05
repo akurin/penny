@@ -8,7 +8,7 @@ transport (penny.store.dixy_search) keeps working with the refreshed cookies.
 
 Run this on a machine with a display (the Mac, not the headless VM):
 
-    SOCKS5_PROXY=socks5://127.0.0.1:10807 ./scripts/uv run --locked python -m penny.dixy_unblock
+    STORE_PROXY=socks5://127.0.0.1:10807 ./scripts/uv run --locked python -m penny.dixy_unblock
 
 The window opens dixy.ru through the proxy. Solve the «Я не робот» check when
 it appears; the script saves the refreshed storage state over state/dixy.json
@@ -30,9 +30,9 @@ def main():
     from .store import load_store_config
     load_store_config(os.getenv("PENNY_STORES_CONFIG") or None)
     ensure_ca_bundle()
-    proxy = os.getenv("SOCKS5_PROXY")
+    proxy = os.getenv("STORE_PROXY")
     if not proxy:
-        raise SystemExit("SOCKS5_PROXY is missing")
+        raise SystemExit("STORE_PROXY is missing")
     state_path = DIXY_STATE_PATH
     from camoufox.sync_api import Camoufox
     captured = {}

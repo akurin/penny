@@ -21,7 +21,7 @@ curl -sfL https://get.k3s.io | \
   K3S_URL=https://<server>:6443 K3S_TOKEN=<node-token> sh -
 ```
 
-Then mark it; a label selects the node, a taint reserves it:
+Then label it; an optional taint reserves it for Penny:
 
 ```sh
 kubectl get nodes -o wide
@@ -30,8 +30,12 @@ kubectl label node <laptop> penny.io/workload=bot
 kubectl taint node <laptop> penny.io/dedicated=bot:NoSchedule
 ```
 
-`deploy/k8s/penny.yaml` already has `nodeSelector: penny.io/workload: bot`;
-uncomment the toleration if you added the taint.
+The manifest carries neither value, so a deployment can target a different
+cluster without editing YAML. The deploy step renders `nodeSelector` from
+`PENNY_NODE_SELECTOR` (`key=value`) and, when set, `tolerations` from
+`PENNY_TOLERATION` (`key=value:effect`). Without a selector the pod stays
+`Pending`, so a missing environment value fails visibly instead of landing on
+the wrong node.
 
 **Networking caveat.** The agent connects outbound to the server, but k3s's
 default flannel overlay needs UDP 8472 between nodes. A home laptop behind NAT
@@ -65,13 +69,16 @@ Configure these under **Settings → Environments → production** in GitHub:
 | Environment variable | Purpose |
 |---|---|
 | `DEEPSEEK_MODEL` | optional; defaults to `deepseek-flash` |
-| `SOCKS5_PROXY` | required; credential-free proxy address reachable **from the laptop** (Mac LAN address, not `host.internal`) |
+| `STORE_PROXY` | required; credential-free SOCKS5 proxy for store requests, reachable **from the laptop** (`socks5h://` keeps DNS at the proxy) |
+| `TELEGRAM_PROXY` | optional; SOCKS5 proxy for Bot API calls, when `api.telegram.org` is filtered from the laptop |
 | `PENNY_LOG_LEVEL` | optional; defaults to `INFO` |
 | `PENNY_LOG_CONTENT` | optional; defaults to `0`; `1` logs private shopping conversations |
+| `PENNY_NODE_SELECTOR` | required; `key=value` node label that selects the laptop, e.g. `penny.io/workload=bot` |
+| `PENNY_TOLERATION` | optional; `key=value:effect` toleration for a tainted (reserved) node, e.g. `penny.io/dedicated=bot:NoSchedule` |
 
 Use **Environment secrets** for the first table and **Environment variables**
 for the second. If the proxy URL ever contains a username or password, move
-`SOCKS5_PROXY` back to an Environment secret and update the workflow reference.
+`STORE_PROXY` back to an Environment secret and update the workflow reference.
 The workflow validates the JSON and creates/updates
 `penny-stores` from it. Keep the file out of Git; the pod mounts the resulting
 Secret at `/app/config/stores.local.json`. The workflow also creates/updates

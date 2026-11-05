@@ -73,9 +73,11 @@ Normal runs use `--locked` so they fail rather than silently changing the lockfi
 
 Create a Telegram bot with BotFather and put its token in `.env`. Set
 ALLOWED_USER_IDS to your and your wife's numeric Telegram IDs (not usernames).
-Set DEEPSEEK_API_KEY and SOCKS5_PROXY. Never commit or share `.env`.
-The SOCKS proxy is used for store requests; Telegram and DeepSeek use the
-server's normal network connection. No incoming port is needed for polling.
+Set DEEPSEEK_API_KEY and STORE_PROXY. Never commit or share `.env`.
+STORE_PROXY carries store requests (`socks5h` keeps DNS at the proxy). Telegram
+and DeepSeek use the normal network connection; set TELEGRAM_PROXY to send Bot
+API calls through a SOCKS5 proxy when `api.telegram.org` is filtered.
+No incoming port is needed for polling.
 Keep the process running on your home server; only one polling instance per bot.
 
 Send «Сколько стоит зубная нить Splat?» in a private chat. Expect matching
@@ -222,7 +224,7 @@ Set `PENNY_DIALOGUE_ROUNDS=3` for repeated stability checks and
 ## Live end-to-end regression
 
 ```sh
-SOCKS5_PROXY=socks5h://127.0.0.1:10807 ./scripts/uv run --locked python -m tests.live_e2e
+STORE_PROXY=socks5h://127.0.0.1:10807 ./scripts/uv run --locked python -m tests.live_e2e
 ```
 
 Runs a set of real queries (unsupported, foreign store, brand-with-form-word,
@@ -231,7 +233,7 @@ bars) through the real stores and DeepSeek and checks invariants: query
 extraction, store grouping, footer subset, prices rendered by code, no filler
 phrases, per-section ascending price for cheapest requests. Costs a handful of
 DeepSeek calls and store requests; needs a proxy reachable from the running OS
-(the same SOCKS5_PROXY as the bot).
+(the same STORE_PROXY as the bot).
 
 ## Next agreed stages
 
@@ -266,7 +268,7 @@ For this Orb VM, the Mac's residential proxy is reachable at
 `host.internal:10807`. Override just that process without editing the shared `.env`:
 
 ```sh
-SOCKS5_PROXY=socks5://host.internal:10807 ./scripts/uv run --locked penny
+STORE_PROXY=socks5://host.internal:10807 ./scripts/uv run --locked penny
 ```
 
 On macOS, keep the localhost proxy address in `.env`. Environment variables
@@ -295,7 +297,7 @@ the image challenge, the bot points you to the Mac helper.
 **On the Mac (real display, same proxy exit):**
 
 ```sh
-SOCKS5_PROXY=socks5://127.0.0.1:10807 ./scripts/uv run --locked python -m penny.dixy_unblock
+STORE_PROXY=socks5://127.0.0.1:10807 ./scripts/uv run --locked python -m penny.dixy_unblock
 ```
 
 The window opens Дикси through the proxy. Solve the captcha when it appears;

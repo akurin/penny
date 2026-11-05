@@ -1,8 +1,7 @@
-# Penny on k3s. Apply after labelling the laptop node:
-#   kubectl label node <laptop> penny.io/workload=bot
-#   # optional, to reserve the node for Penny:
-#   kubectl taint node <laptop> penny.io/dedicated=bot:NoSchedule
-# and after creating the `penny-env` Secret (see secret.example.yaml).
+# Penny on k3s. Placement is cluster-specific, so it is not hard-coded here: the deploy
+# step fills in `nodeSelector` and `tolerations` from PENNY_NODE_SELECTOR (key=value) and
+# PENNY_TOLERATION (key=value:effect), and creates the Secrets (see secret.example.yaml).
+# Without those values the pod stays Pending, which is the intended fail-safe.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -56,15 +55,13 @@ spec:
       # networking keeps that proxy reachable and avoids depending on the
       # flannel overlay through NAT. Penny opens no ports.
       hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
-      nodeSelector:
-        penny.io/workload: bot
-      # Uncomment together with the taint when the node is dedicated:
-      # tolerations:
-      #   - key: penny.io/dedicated
-      #     operator: Equal
-      #     value: bot
-      #     effect: NoSchedule
+      # The bot needs no cluster names. Resolve through the node so DNS keeps working
+      # when CoreDNS (on the control plane, over the overlay) is unreachable.
+      dnsPolicy: Default
+      # Placement is filled in by the deploy step: labels select the node, tolerations let
+      # the pod run on a node that is tainted because it is reserved for this workload.
+      nodeSelector: {}
+      tolerations: []
       # If the GHCR package is private, create a pull secret and uncomment:
       # imagePullSecrets:
       #   - name: ghcr-pull

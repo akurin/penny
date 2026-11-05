@@ -84,7 +84,7 @@ def _launch(mode=None):
     if mode is None:
         mode = shared_headless_mode()
     return Camoufox(headless=mode, os="macos", humanize=True, block_webrtc=True,
-                    geoip=True, proxy={"server": os.environ["SOCKS5_PROXY"]})
+                    geoip=True, proxy={"server": os.environ["STORE_PROXY"]})
 
 
 def get_browser(site):
