@@ -413,10 +413,12 @@ def lenta_browser_search(query, proxy=None):
     to the configured pickup store before the final search."""
     with _site_lock("lenta"):
         browser = get_browser("lenta")
-        context = _context(browser, "lenta")
+        # Keep the context (Qrator's clearance is bound to its cookies) but use a
+        # fresh page per query: reusing a finished page aborts the next goto.
+        context = _persistent_context(browser, "lenta")
+        page = context.new_page()
         try:
             deadline = _deadline(45)
-            page = context.new_page()
             page.goto("https://lenta.com/search/" + quote(query) + "/",
                       wait_until="domcontentloaded", timeout=_timeout_ms(deadline))
             data = token = device = domain = None
@@ -435,6 +437,7 @@ def lenta_browser_search(query, proxy=None):
                 else:
                     page.wait_for_timeout(400)
             if data is None:
+                _drop_context("lenta")  # the cached clearance is stale
                 raise ValueError("Lenta search never succeeded (challenge or block)")
             store_id = _lenta_store_id()
             try:
@@ -461,7 +464,7 @@ def lenta_browser_search(query, proxy=None):
                   store=data.get("items", [{}])[0].get("storeId") if data.get("items") else None)
             return result
         finally:
-            context.close()
+            page.close()  # the context stays for the next query
 
 
 def _lenta_alias_key(value):
