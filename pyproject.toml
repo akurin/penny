@@ -16,7 +16,7 @@ penny = "penny.bot:main"
 include = ["penny*"]
 
 [tool.uv]
-environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+environments = ["sys_platform == 'linux'"]
 
 [dependency-groups]
 dev = [

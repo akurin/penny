@@ -16,7 +16,7 @@ captcha flow creates. Пятёрочка and Лента use
 time, one browser process per display mode on its own playwright thread.
 Пятёрочка runs in plain headless — ServicePipe's block page rejects the Xvfb
 «virtual» mode (verified 2026-10-31) — while Лента needs a real WebGL context:
-`headless="virtual"` (Xvfb) where it is available, a headed window otherwise.
+`headless="virtual"`, which needs Xvfb.
 `PENNY_BROWSER_HEADLESS` forces one mode for both, so override it only for
 experiments. Лента renumbers pickup store ids occasionally while catalogue
 aliases stay stable: if the configured id is rejected, the bot resolves the
@@ -34,11 +34,12 @@ answer. A human can unblock it from Telegram — the reply offers a «Пройт
 
 ## Run
 
-Use [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/). Penny targets
+Linux, both in the container and in development; the wrapper refuses other hosts.
 Python 3.13 is the supported runtime, recorded in `.python-version`; uv downloads
 it if necessary. `uv.lock` records exact dependency resolutions and belongs in Git.
 The browser stores need the Camoufox binary once: `./scripts/uv run --locked python -m camoufox fetch`
-(and `apt install xvfb` on a Linux server for Лента).
+(and `apt install xvfb` for Лента).
 
 From the project directory:
 
@@ -49,7 +50,7 @@ From the project directory:
 ```
 
 Keep an existing `.env`; do not overwrite it. The wrapper picks an environment
-by OS and architecture, such as `.venv-macos-arm64` or `.venv-linux-aarch64`, so
+by architecture, such as `.venv-linux-aarch64`, so
 use `./scripts/uv` rather than bare `uv`.
 Never copy an environment to another OS or machine: recreate it from the lockfile.
 Stop a running Penny with Ctrl+C: it prints that it is stopping and exits within
