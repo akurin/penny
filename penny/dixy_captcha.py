@@ -172,7 +172,7 @@ async def unblock(proxy, state_path, send_image, get_answer, notify):
                                        "не проходят — попробуйте запрос через пару минут.")
             thumb = await _wait_for(lambda: _find_thumb(page), CHALLENGE_TIMEOUT_S)
             if not thumb:
-                return ("no_slider", "Капча не показала ползунок — разблокируйте на Mac: "
+                return ("no_slider", "Капча не показала ползунок — разблокируйте на машине с дисплеем: "
                                      "python -m penny.dixy_unblock.")
             frame, handle = thumb
             await _pull_slider(page, frame, handle)
@@ -186,7 +186,7 @@ async def unblock(proxy, state_path, send_image, get_answer, notify):
                         return "slider_passed", "Капча пройдена ползунком — Дикси разблокирован."
                     return ("state_saved", "Сессия Дикси сохранена, но обычные запросы пока "
                                            "не проходят — попробуйте запрос через пару минут.")
-                return ("no_challenge", "Капча не показала картинку — разблокируйте на Mac: "
+                return ("no_challenge", "Капча не показала картинку — разблокируйте на машине с дисплеем: "
                                         "python -m penny.dixy_unblock.")
             for attempt in range(1, ANSWER_TRIES + 1):
                 image = (await challenge.query_selector("img")
@@ -200,7 +200,7 @@ async def unblock(proxy, state_path, send_image, get_answer, notify):
                 field = await challenge.query_selector("input")
                 submit = await challenge.query_selector("button.CaptchaButton_view_action")
                 if not field or not submit:
-                    return ("widget_changed", "Капча поменяла вид — разблокируйте на Mac: "
+                    return ("widget_changed", "Капча поменяла вид — разблокируйте на машине с дисплеем: "
                                               "python -m penny.dixy_unblock.")
                 await field.fill(answer)
                 await submit.click()
@@ -231,6 +231,6 @@ async def unblock(proxy, state_path, send_image, get_answer, notify):
                 return ("allow_pending", "Капча пройдена и cookie сохранены, но Дикси ещё не пускает "
                                          "запросы с этого выхода. Попробуйте запрос через пару минут.")
             return ("attempts_exhausted", "Не удалось пройти капчу за несколько попыток — разблокируйте "
-                                          "на Mac: python -m penny.dixy_unblock.")
+                                          "на машине с дисплеем: python -m penny.dixy_unblock.")
         finally:
             await context.close()

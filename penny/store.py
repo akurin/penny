@@ -48,9 +48,9 @@ def ensure_ca_bundle():
     """Point curl_cffi at certifi's CA bundle.
 
     The curl-impersonate build bundled with curl_cffi can lag behind fresh
-    roots: Dixy moved to GlobalSign Root R46 and the macOS build failed
-    verification while Linux and macOS system curl passed. certifi ships with
-    httpx and contains the root. CURL_CA_BUNDLE set by the user wins."""
+    roots: Dixy moved to GlobalSign Root R46 and the bundled build failed
+    verification while the system curl passed. certifi ships with httpx and
+    contains the root. CURL_CA_BUNDLE set by the user wins."""
     import certifi
     os.environ.setdefault("CURL_CA_BUNDLE", certifi.where())
 

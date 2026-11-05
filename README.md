@@ -16,7 +16,7 @@ captcha flow creates. Пятёрочка and Лента use
 time, one browser process per display mode on its own playwright thread.
 Пятёрочка runs in plain headless — ServicePipe's block page rejects the Xvfb
 «virtual» mode (verified 2026-10-31) — while Лента needs a real WebGL context:
-`headless="virtual"` (Xvfb) on Linux, a headed window on macOS.
+`headless="virtual"` (Xvfb) where it is available, a headed window otherwise.
 `PENNY_BROWSER_HEADLESS` forces one mode for both, so override it only for
 experiments. Лента renumbers pickup store ids occasionally while catalogue
 aliases stay stable: if the configured id is rejected, the bot resolves the
@@ -34,8 +34,7 @@ answer. A human can unblock it from Telegram — the reply offers a «Пройт
 
 ## Run
 
-Use [uv](https://docs.astral.sh/uv/getting-started/installation/) on both
-macOS and Linux. On macOS you can install it with `brew install uv`.
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/).
 Python 3.13 is the supported runtime, recorded in `.python-version`; uv downloads
 it if necessary. `uv.lock` records exact dependency resolutions and belongs in Git.
 The browser stores need the Camoufox binary once: `./scripts/uv run --locked python -m camoufox fetch`
@@ -110,8 +109,8 @@ across five stores. DeepSeek calls retry once on transient 422/429/5xx; the Dixy
 HTTP transport retries its own listing request. Price budgets
 («до 200 рублей») are parsed by the model and enforced in code: items above the
 budget never render. At startup Penny
-points curl_cffi at certifi's CA bundle (`CURL_CA_BUNDLE`): the macOS
-curl-impersonate build lacked the GlobalSign Root R46 used by Dixy since 2025.
+points curl_cffi at certifi's CA bundle (`CURL_CA_BUNDLE`): the bundled
+curl-impersonate build lacked the GlobalSign Root R46 that Dixy uses.
 No unbounded retries, paid web research, browser fallback, or arbitrary tools.
 One in-flight question per user, with a ten-second minimum interval.
 Telegram sends retry once on TelegramNetworkError (a 20-second blip used to
@@ -165,7 +164,7 @@ Product sizes appear in names when supplied; unambiguous unit prices are compare
 
 ## Verification
 
-CI runs Ruff and the offline tests on Linux and macOS. A successful `Tests`
+CI runs Ruff and the offline tests on Linux. A successful `Tests`
 run for a push to `master` triggers deployment of that exact commit; manual
 deployments run their own Linux checks first. Ruff is a locked development
 dependency, excluded from the production image.

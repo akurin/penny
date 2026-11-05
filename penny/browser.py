@@ -70,8 +70,8 @@ class BrowserUnavailable(RuntimeError):
 
 def headless_mode(site):
     """5ka needs plain headless (ServicePipe blocks the Xvfb mode); Lenta's
-    Qrator needs a real WebGL context: 'virtual' (Xvfb) on Linux, headed on
-    macOS. One browser process per mode serves that site."""
+    Qrator needs a real WebGL context: 'virtual' (Xvfb) where it is available,
+    a headed window otherwise. One browser process per mode serves that site."""
     override = os.getenv("PENNY_BROWSER_HEADLESS")
     if override in ("true", "false", "virtual"):
         return {"true": True, "false": False, "virtual": "virtual"}[override]
