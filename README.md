@@ -261,19 +261,10 @@ Run this in the same OS and shell environment as the bot:
 
 It checks only the store via the configured proxy; it does not call DeepSeek or
 send Telegram messages. `transport_code=7` means a connection could not be
-established. If the proxy runs on your Mac, localhost works only when Penny also
-runs on the Mac; a VM needs an address reachable from inside that VM.
-Bot failures now print a safe stage/type/status summary in the terminal.
-
-For this Orb VM, the Mac's residential proxy is reachable at
-`host.internal:10807`. Override just that process without editing the shared `.env`:
-
-```sh
-STORE_PROXY=socks5://host.internal:10807 ./scripts/uv run --locked penny
-```
-
-On macOS, keep the localhost proxy address in `.env`. Environment variables
-supplied on the command line take precedence over `.env`.
+established. The proxy address has to be reachable from wherever Penny runs: a
+localhost address works only on the same machine, a VM needs an address
+reachable from inside it. Environment variables supplied on the command line
+take precedence over `.env`.
 
 ## Unblock Дикси by hand
 
