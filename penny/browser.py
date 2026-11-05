@@ -28,7 +28,14 @@ STATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 
 _browsers = {}  # mode key -> (manager, browser): 5ka headless, Lenta virtual
 _site_contexts = {}  # site -> long-lived context (5ka keeps its clearance)
-_browser_lock = threading.Lock()  # playwright sync API is single-threaded
+# One lock per browser process. Playwright's sync API must be called from the
+# thread that owns the browser, and every headless mode owns one; a single
+# global lock also serialized 5ka and Lenta, which share nothing.
+_browser_locks = {key: threading.Lock() for key in ("headless", "virtual", "headed")}
+
+
+def _site_lock(site):
+    return _browser_locks[_browser_key(headless_mode(site))]
 # Playwright's sync API is bound to the thread that started it, and two sync
 # Camoufox instances cannot share one thread (the first leaves a running loop
 # behind). Each headless mode therefore gets its own single browser thread:
@@ -254,7 +261,7 @@ def fiveka_browser_search(query, proxy=None, store=None):
     bound to this browser, and a fresh challenge on every query is what got the
     exit rate-limited. The clearance cookies are written back to state/5ka.json
     for the next bot start."""
-    with _browser_lock:
+    with _site_lock("5ka"):
         browser = get_browser("5ka")
         context = _persistent_context(browser, "5ka")
         try:
@@ -404,7 +411,7 @@ def lenta_browser_search(query, proxy=None):
     """Lenta via the in-page gateway call; mirrors ../shopping/examples/lenta_search.py:
     the search doubles as the Qrator readiness probe, then the session is pinned
     to the configured pickup store before the final search."""
-    with _browser_lock:
+    with _site_lock("lenta"):
         browser = get_browser("lenta")
         context = _context(browser, "lenta")
         try:
