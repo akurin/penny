@@ -1,19 +1,23 @@
 import json
 import os
+import time
 import unittest
 from unittest.mock import patch
 
 from penny.browser import (
     BrowserUnavailable,
+    LentaError,
     LentaStoreMoved,
     _lenta_set_store,
     _lenta_store_by_alias,
     _normalize_5ka,
     _normalize_lenta,
     _verify_lenta_store,
+    lenta_browser_search,
     shared_headless_mode,
     get_browser,
 )
+from penny.store import LentaBlocked
 
 
 class Page:
@@ -25,6 +29,32 @@ class Page:
 
     def wait_for_timeout(self, milliseconds):
         pass
+
+
+class FlowPage:
+    def __init__(self):
+        self.closed = False
+
+    def goto(self, *args, **kwargs):
+        pass
+
+    def wait_for_timeout(self, milliseconds):
+        pass
+
+    def close(self):
+        self.closed = True
+
+
+class FlowContext:
+    def __init__(self, cookies):
+        self._cookies = cookies
+        self.page = FlowPage()
+
+    def cookies(self, url):
+        return self._cookies
+
+    def new_page(self):
+        return self.page
 
 
 class BrowserTests(unittest.TestCase):
@@ -142,6 +172,66 @@ class BrowserTests(unittest.TestCase):
             _lenta_set_store(failed, "old", "device", "example", 1001)
         ok = Page({"status": 200, "body": json.dumps({"storeId": 1001, "sessionToken": "new"})})
         self.assertEqual(_lenta_set_store(ok, "old", "device", "example", 1001), "new")
+
+    def test_lenta_403_is_not_retried_and_resets_the_browser(self):
+        context = FlowContext([
+            {"name": "Utk_SessionToken", "value": "token"},
+            {"name": "Utk_DvcGuid", "value": "device"},
+            {"name": "App_Cache_CitySlug", "value": "moscow"},
+        ])
+        calls = []
+
+        def blocked(*args, **kwargs):
+            calls.append(1)
+            raise LentaError("blocked", 403)
+
+        with patch("penny.browser.get_browser", return_value=object()), \
+                patch("penny.browser._persistent_context", return_value=context), \
+                patch("penny.browser._lenta_search", side_effect=blocked), \
+                patch("penny.browser._drop_context") as drop, \
+                patch("penny.browser._close_one") as close, \
+                patch("penny.browser.event"):
+            with self.assertRaises(LentaBlocked) as caught:
+                lenta_browser_search("хлеб")
+        self.assertEqual(caught.exception.http_status, 403)
+        self.assertEqual(len(calls), 1)
+        drop.assert_called_once_with("lenta")
+        close.assert_called_once_with("virtual")
+        self.assertTrue(context.page.closed)
+
+    def test_lenta_challenge_timeout_resets_the_browser(self):
+        context = FlowContext([])
+        with patch("penny.browser.get_browser", return_value=object()), \
+                patch("penny.browser._persistent_context", return_value=context), \
+                patch("penny.browser._deadline", return_value=time.time() + 0.01), \
+                patch("penny.browser._lenta_search") as search, \
+                patch("penny.browser._drop_context") as drop, \
+                patch("penny.browser._close_one") as close, \
+                patch("penny.browser.event"):
+            with self.assertRaises(LentaBlocked):
+                lenta_browser_search("хлеб")
+        search.assert_not_called()
+        drop.assert_called_once_with("lenta")
+        close.assert_called_once_with("virtual")
+
+    def test_lenta_transient_errors_are_bounded(self):
+        context = FlowContext([{"name": "Utk_SessionToken", "value": "token"}])
+        calls = []
+
+        def unavailable(*args, **kwargs):
+            calls.append(1)
+            raise LentaError("upstream", 503)
+
+        with patch("penny.browser.get_browser", return_value=object()), \
+                patch("penny.browser._persistent_context", return_value=context), \
+                patch("penny.browser._lenta_search", side_effect=unavailable), \
+                patch("penny.browser._drop_context"), \
+                patch("penny.browser._close_one") as close, \
+                patch("penny.browser.event"):
+            with self.assertRaises(LentaBlocked):
+                lenta_browser_search("хлеб")
+        self.assertEqual(len(calls), 3)
+        close.assert_called_once_with("virtual")
 
     def test_close_all_browsers_submits_every_mode_before_waiting(self):
         from penny.browser import close_all_browsers

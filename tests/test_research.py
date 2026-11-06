@@ -246,6 +246,27 @@ class ResearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('блокирует', combined['notes'][0])
         self.assertNotIn('5ka', combined['sites'])
 
+    async def test_lenta_block_is_explained_without_immediate_cooldown(self):
+        import penny.store as store
+        from penny.store import LentaBlocked
+        model = Model('fake', 'fake')
+        model.followups = AsyncMock(return_value=[])
+
+        def lookup(site, query, proxy, sort='popularity'):
+            if site == 'lenta':
+                raise LentaBlocked('blocked', 403)
+            return result()
+
+        async def inline(fn, *args):
+            return fn(*args)
+
+        with patch('penny.research.asyncio.to_thread', side_effect=inline), \
+                self.assertLogs('penny', level='ERROR'):
+            combined = await research(model, 'порошок', 'порошок', 'fake', lookup)
+        self.assertFalse(store.site_cooldown_active('lenta'))
+        self.assertIn('ограничил', combined['notes'][0])
+        self.assertNotIn('lenta', combined['sites'])
+
     async def test_connect_timeout_is_retried_once(self):
         model = Model('fake', 'fake')
         model.followups = AsyncMock(return_value=[])
