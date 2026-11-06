@@ -39,6 +39,18 @@ class ServiceBlocked(ValueError):
     """ServicePipe serves a static block page for this proxy exit (5ka)."""
 
 
+class LentaBlocked(ValueError):
+    """Qrator rejected Lenta's browser; the browser must be recreated.
+
+    A stale or blocked browser fingerprint keeps returning 401/403/429 and
+    never grants Utk_SessionToken. Closing the browser, not only its context,
+    gives the next attempt a fresh fingerprint.
+    """
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.http_status = status
+
+
 class StateError(RuntimeError):
     """Dixy's session cookies are missing or stale; unblock it via /dixy_captcha."""
     pass

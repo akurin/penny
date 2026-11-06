@@ -21,6 +21,11 @@ time, one browser process per display mode on its own playwright thread.
 experiments. Лента renumbers pickup store ids occasionally while catalogue
 aliases stay stable: if the configured id is rejected, the bot resolves the
 current id through the pickup-store list by alias and caches it for the process.
+Qrator can also reject a long-lived browser fingerprint: a 401/403/429 now ends
+that search immediately, closes the Lenta browser so the next attempt gets a
+fresh fingerprint, and does not retry the rejected gateway call. (The old loop
+sent roughly one request every 400 ms for 45 s and made the block worse.)
+Repeated failures still use the normal three-strike, ten-minute pause.
 
 Дикси deliberately stays on a plain HTTP transport. A flagged proxy exit gets
 Yandex SmartCaptcha: Dixy's 403 page shows a «Я не робот» checkbox, a click

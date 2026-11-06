@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 from .logging_setup import event
 from .store_config import SITES
-from .store import ServiceBlocked
+from .store import LentaBlocked, ServiceBlocked
 
 STATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "state")
 
@@ -409,7 +409,12 @@ def _lenta_search(page, token, device, domain, query, limit=36, deadline=None):
 def lenta_browser_search(query, proxy=None):
     """Lenta via the in-page gateway call; mirrors ../shopping/examples/lenta_search.py:
     the search doubles as the Qrator readiness probe, then the session is pinned
-    to the configured pickup store before the final search."""
+    to the configured pickup store before the final search.
+
+    A rejected browser is discarded, not retried. Qrator ties the block to the
+    browser fingerprint, so closing only the context did not recover it; the
+    next attempt needs a fresh browser process. Retrying a 403 every 400 ms for
+    45 s made the block worse instead of clearing it."""
     with _site_lock("lenta"):
         browser = get_browser("lenta")
         # Keep the context (Qrator's clearance is bound to its cookies) but use a
@@ -417,70 +422,103 @@ def lenta_browser_search(query, proxy=None):
         context = _persistent_context(browser, "lenta")
         page = context.new_page()
         started = time.time()
+        reset_browser = False
+        reset_reason = None
         try:
             deadline = _deadline(45)
             page.goto("https://lenta.com/search/" + quote(query) + "/",
                       wait_until="domcontentloaded", timeout=_timeout_ms(deadline))
             data = token = device = domain = None
             last_error = None
+            blocked_status = None
             clearance_logged = False
+            transient_failures = 0
             while time.time() < deadline:
                 cookies = {c["name"]: c["value"] for c in context.cookies("https://lenta.com")}
                 token = cookies.get("Utk_SessionToken")
-                if token:
-                    device = cookies.get("Utk_DvcGuid", "")
-                    domain = cookies.get("App_Cache_CitySlug", "moscow")
-                    if not clearance_logged:
-                        clearance_logged = True
-                        event("lenta_clearance", seconds=round(time.time() - started, 1),
-                              city=domain)
-                    try:
-                        data = _lenta_search(page, token, device, domain, query,
-                                             deadline=deadline)
-                        break
-                    except ValueError as exc:
-                        status = getattr(exc, "http_status", None)
-                        current = (type(exc).__name__, status)
-                        if current != last_error:
-                            last_error = current
-                            event("lenta_search_retry", error=current[0],
-                                  http_status=status,
-                                  seconds=round(time.time() - started, 1))
-                        page.wait_for_timeout(400)
-                else:
+                if not token:
                     page.wait_for_timeout(400)
+                    continue
+                device = cookies.get("Utk_DvcGuid", "")
+                domain = cookies.get("App_Cache_CitySlug", "moscow")
+                if not clearance_logged:
+                    clearance_logged = True
+                    event("lenta_clearance", seconds=round(time.time() - started, 1),
+                          city=domain)
+                try:
+                    data = _lenta_search(page, token, device, domain, query,
+                                         deadline=deadline)
+                    break
+                except (LentaError, ValueError) as exc:
+                    status = getattr(exc, "http_status", None)
+                    current = (type(exc).__name__, status)
+                    if current != last_error:
+                        last_error = current
+                        event("lenta_search_retry", error=current[0],
+                              http_status=status,
+                              seconds=round(time.time() - started, 1))
+                    if status in (401, 403, 429):
+                        # A rejected clearance will not become valid by retrying;
+                        # every extra request only deepens the block.
+                        blocked_status = status
+                        break
+                    transient_failures += 1
+                    if transient_failures >= 3:
+                        break
+                    page.wait_for_timeout(1000 * transient_failures)
             if data is None:
-                _drop_context("lenta")  # the cached clearance is stale
+                reset_browser = True
+                reset_reason = "block" if blocked_status else "challenge"
                 event("lenta_failed", token=bool(token),
-                      http_status=(last_error[1] if last_error else None),
+                      http_status=(blocked_status if blocked_status is not None
+                                   else (last_error[1] if last_error else None)),
                       seconds=round(time.time() - started, 1))
-                raise ValueError("Lenta search never succeeded (challenge or block)")
-            store_id = _lenta_store_id()
+                if blocked_status in (401, 403, 429):
+                    raise LentaBlocked(f"Lenta search HTTP {blocked_status}",
+                                       blocked_status)
+                raise LentaBlocked("Lenta search never succeeded (challenge or block)")
             try:
-                token = _lenta_set_store(page, token, device, domain, store_id,
-                                         deadline=deadline)
-            except LentaStoreMoved:
-                # Lenta renumbers pickup stores while catalogue aliases stay put;
-                # resolve the current id once and cache it for this process.
-                store_id = _lenta_store_by_alias(
-                    page, token, device, domain, SITES["lenta"].get("alias"),
-                    deadline=deadline)
-                event("lenta_store_resolved", alias=SITES["lenta"].get("alias"),
-                      store=store_id)
-                token = _lenta_set_store(page, token, device, domain, store_id,
-                                         deadline=deadline)
-            data = _lenta_search(page, token, device, domain, query, deadline=deadline)
-            _verify_lenta_store(data)
-            products = _normalize_lenta(data)
-            result = {"products": products, "site": "lenta", "sites": ["lenta"],
-                      "site_urls": {"lenta": "https://lenta.com/search/?query=" + quote(query)},
-                      "checked": _now_msk(), "url": "https://lenta.com/search/?query=" + quote(query),
-                      "corrected": "", "address": None}
-            event("browser_search", site="lenta", candidates=len(products),
-                  store=data.get("items", [{}])[0].get("storeId") if data.get("items") else None)
-            return result
+                store_id = _lenta_store_id()
+                try:
+                    token = _lenta_set_store(page, token, device, domain, store_id,
+                                             deadline=deadline)
+                except LentaStoreMoved:
+                    # Lenta renumbers pickup stores while catalogue aliases stay put;
+                    # resolve the current id once and cache it for this process.
+                    store_id = _lenta_store_by_alias(
+                        page, token, device, domain, SITES["lenta"].get("alias"),
+                        deadline=deadline)
+                    event("lenta_store_resolved", alias=SITES["lenta"].get("alias"),
+                          store=store_id)
+                    token = _lenta_set_store(page, token, device, domain, store_id,
+                                             deadline=deadline)
+                data = _lenta_search(page, token, device, domain, query, deadline=deadline)
+                _verify_lenta_store(data)
+                products = _normalize_lenta(data)
+                result = {"products": products, "site": "lenta", "sites": ["lenta"],
+                          "site_urls": {"lenta": "https://lenta.com/search/?query=" + quote(query)},
+                          "checked": _now_msk(), "url": "https://lenta.com/search/?query=" + quote(query),
+                          "corrected": "", "address": None}
+                event("browser_search", site="lenta", candidates=len(products),
+                      store=data.get("items", [{}])[0].get("storeId") if data.get("items") else None)
+                return result
+            except LentaError as exc:
+                status = getattr(exc, "http_status", None)
+                if status in (401, 403, 429):
+                    reset_browser = True
+                    reset_reason = "block"
+                    raise LentaBlocked(f"Lenta gateway HTTP {status}", status) from exc
+                raise
         finally:
-            page.close()  # the context stays for the next query
+            try:
+                page.close()  # the context stays for the next query
+            except Exception:
+                pass
+            if reset_browser:
+                _drop_context("lenta")
+                _close_one(_browser_key(headless_mode("lenta")))
+                event("lenta_browser_reset", reason=reset_reason,
+                      seconds=round(time.time() - started, 1))
 
 
 def _lenta_alias_key(value):

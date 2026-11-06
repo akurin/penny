@@ -5,7 +5,7 @@ import os
 import time
 from .store_config import SITES, DEFAULT_SITES
 from .store_execution import run_store
-from .store import (search, CaptchaBlocked, ServiceBlocked,
+from .store import (search, CaptchaBlocked, LentaBlocked, ServiceBlocked,
                     SERVICE_BLOCK_COOLDOWN_S, StateError, site_cooldown_active,
                     site_cooldown_remaining, pause_site,
                     note_site_failure, note_site_success)
@@ -32,6 +32,9 @@ def note_for(site, exc):
     if isinstance(exc, ServiceBlocked):
         return (f"{SITE_NAMES[site]}: сайт временно блокирует запросы с этого "
                 "подключения — результаты неполные.")
+    if isinstance(exc, LentaBlocked):
+        return (f"{SITE_NAMES[site]}: сайт временно ограничил запросы — "
+                "результаты неполные.")
     if isinstance(exc, TimeoutError):
         return (f"{SITE_NAMES[site]}: не успела проверить за отведённое время — "
                 "результаты неполные.")
