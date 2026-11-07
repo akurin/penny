@@ -111,6 +111,24 @@ key. The two accounts and their keys are not interchangeable. Penny sends
 `thinking: {"type": "disabled"}` and `response_format: {"type": "json_object"}`,
 both supported by GLM-4.7-Flash.
 
+### OpenRouter
+
+OpenRouter uses the same three variables:
+
+```sh
+MODEL_API_KEY=sk-or-v1-...
+MODEL_NAME=z-ai/glm-4.7-flash
+MODEL_BASE_URL=https://openrouter.ai/api/v1
+```
+
+When the base URL host is `openrouter.ai`, Penny sends OpenRouter's normalized
+`reasoning: {"enabled": false}` instead of the provider-native `thinking`
+field, and sets `provider.require_parameters` so routing only selects providers
+that support JSON mode and that reasoning flag. This keeps the whole token
+budget for the answer; GLM-4.7-Flash otherwise reasons by default and can return
+empty content at Penny's 400/1000-token limits. OpenRouter requests are billed to
+your OpenRouter balance, not to Z.AI directly.
+
 ## Local store configuration
 
 Branch addresses, store codes and the tokens used to verify the returned

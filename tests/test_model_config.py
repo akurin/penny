@@ -22,6 +22,25 @@ class ModelSettingsTest(unittest.TestCase):
         model = Model("key", "glm-4.7-flash", "https://api.z.ai/api/paas/v4/")
         self.assertEqual(model.base_url, "https://api.z.ai/api/paas/v4")
 
+    def test_native_provider_disables_thinking(self):
+        model = Model("key", "glm-4.7-flash", "https://api.z.ai/api/paas/v4")
+        payload = model._payload("instruction", {"message": "x"}, 400, None)
+        self.assertEqual(payload["thinking"], {"type": "disabled"})
+        self.assertNotIn("reasoning", payload)
+        self.assertNotIn("provider", payload)
+
+    def test_openrouter_uses_normalized_reasoning_field(self):
+        model = Model("key", "z-ai/glm-4.7-flash", "https://openrouter.ai/api/v1")
+        payload = model._payload("instruction", {"message": "x"}, 400, None)
+        self.assertTrue(model.openrouter)
+        self.assertEqual(payload["reasoning"], {"enabled": False})
+        self.assertEqual(payload["provider"], {"require_parameters": True})
+        self.assertNotIn("thinking", payload)
+
+    def test_openrouter_detection_needs_the_host(self):
+        model = Model("key", "z-ai/glm-4.7-flash", "https://openrouter.ai.example/api/v1")
+        self.assertFalse(model.openrouter)
+
 
 if __name__ == "__main__":
     unittest.main()

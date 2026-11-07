@@ -62,7 +62,7 @@ Configure these under **Settings → Environments → production** in GitHub:
 |---|---|
 | `ALLOWED_USER_IDS` | required; comma-separated numeric IDs |
 | `MODEL_NAME` | optional; defaults to `deepseek-flash` |
-| `MODEL_BASE_URL` | optional; defaults to `https://api.deepseek.com`; API root without `/chat/completions` |
+| `MODEL_BASE_URL` | optional; defaults to `https://api.deepseek.com`; API root without `/chat/completions` (for OpenRouter use `https://openrouter.ai/api/v1`) |
 | `STORE_PROXY` | required; credential-free SOCKS5 proxy for store requests, reachable **from the node** (`socks5h://` keeps DNS at the proxy) |
 | `TELEGRAM_PROXY` | optional; SOCKS5 proxy for Bot API calls, when `api.telegram.org` is filtered from the node |
 | `PENNY_LOG_LEVEL` | optional; defaults to `INFO` |
