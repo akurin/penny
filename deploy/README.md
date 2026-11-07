@@ -55,12 +55,12 @@ Configure these under **Settings → Environments → production** in GitHub:
 | `CI_DEPLOY_SSH_KEY` | key for the `ci-deploy` SSH account |
 | `K3S_HOST` | SSH host reachable from GitHub |
 | `TELEGRAM_BOT_TOKEN` | bot token |
-| `ALLOWED_USER_IDS` | comma-separated numeric IDs |
 | `MODEL_API_KEY` | model key |
 | `PENNY_STORES_CONFIG_JSON` | entire contents of the local `config/stores.local.json` file, pasted as one multiline secret |
 
 | Environment variable | Purpose |
 |---|---|
+| `ALLOWED_USER_IDS` | required; comma-separated numeric IDs |
 | `MODEL_NAME` | optional; defaults to `deepseek-flash` |
 | `MODEL_BASE_URL` | optional; defaults to `https://api.deepseek.com`; API root without `/chat/completions` |
 | `STORE_PROXY` | required; credential-free SOCKS5 proxy for store requests, reachable **from the node** (`socks5h://` keeps DNS at the proxy) |
