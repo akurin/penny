@@ -1,7 +1,7 @@
-"""End-to-end live regression: real stores + real DeepSeek, no Telegram.
+"""End-to-end live regression: real stores + real model, no Telegram.
 
 Run: STORE_PROXY=... python -m tests.live_e2e
-Skips (with OK-skip) when STORE_PROXY or DEEPSEEK_API_KEY is missing, so CI
+Skips (with OK-skip) when STORE_PROXY or MODEL_API_KEY is missing, so CI
 and dry machines do not spend money or hit the network.
 """
 import asyncio
@@ -13,7 +13,7 @@ from decimal import Decimal
 from dotenv import load_dotenv
 
 from penny.research import research
-from penny.service import Model
+from penny.service import Model, model_settings
 from penny.store import reply_chunks
 
 CHECKS = []
@@ -212,11 +212,11 @@ GROUND_TRUTH = [
 async def main():
     load_dotenv(".env")
     proxy = os.environ.get("STORE_PROXY")
-    key = os.environ.get("DEEPSEEK_API_KEY")
+    key, model_name, base_url = model_settings()
     if not proxy or not key:
-        print("SKIP: STORE_PROXY / DEEPSEEK_API_KEY missing")
+        print("SKIP: STORE_PROXY / MODEL_API_KEY missing")
         return 0
-    model = Model(key, os.environ.get("DEEPSEEK_MODEL", "deepseek-flash"))
+    model = Model(key, model_name, base_url)
     results = await asyncio.gather(
         *(pipeline(model, proxy, case["text"]) for case in CASES),
         return_exceptions=True)

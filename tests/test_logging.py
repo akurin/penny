@@ -13,7 +13,7 @@ class LoggingTests(unittest.IsolatedAsyncioTestCase):
             emit.assert_not_called()
 
     def test_secrets_and_proxy_credentials_redacted(self):
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-secret"}):
+        with patch.dict(os.environ, {"MODEL_API_KEY": "test-secret"}):
             self.assertEqual(redact("test-secret socks5://user:pass@host:1080"), "[REDACTED] [URL]")
 
     def test_failure_excludes_exception_message(self):

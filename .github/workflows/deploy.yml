@@ -85,8 +85,9 @@ jobs:
           K3S_HOST: ${{ secrets.K3S_HOST }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-flash' }}
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          MODEL_NAME: ${{ vars.MODEL_NAME || 'deepseek-flash' }}
+          MODEL_BASE_URL: ${{ vars.MODEL_BASE_URL || 'https://api.deepseek.com' }}
           STORE_PROXY: ${{ vars.STORE_PROXY }}
           TELEGRAM_PROXY: ${{ vars.TELEGRAM_PROXY }}
           PENNY_LOG_LEVEL: ${{ vars.PENNY_LOG_LEVEL || 'INFO' }}
@@ -99,7 +100,7 @@ jobs:
           set -euo pipefail
           umask 077
           for name in CI_DEPLOY_SSH_KEY K3S_HOST TELEGRAM_BOT_TOKEN \
-            ALLOWED_USER_IDS DEEPSEEK_API_KEY PENNY_STORES_CONFIG_JSON; do
+            ALLOWED_USER_IDS MODEL_API_KEY PENNY_STORES_CONFIG_JSON; do
             if test -z "${!name}"; then
               echo "Missing production secret: $name" >&2
               exit 1
@@ -129,8 +130,9 @@ jobs:
           kubectl -n penny create secret generic penny-env \
             --from-literal=TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
             --from-literal=ALLOWED_USER_IDS="$ALLOWED_USER_IDS" \
-            --from-literal=DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" \
-            --from-literal=DEEPSEEK_MODEL="$DEEPSEEK_MODEL" \
+            --from-literal=MODEL_API_KEY="$MODEL_API_KEY" \
+            --from-literal=MODEL_NAME="$MODEL_NAME" \
+            --from-literal=MODEL_BASE_URL="$MODEL_BASE_URL" \
             --from-literal=STORE_PROXY="$STORE_PROXY" \
             --from-literal=TELEGRAM_PROXY="$TELEGRAM_PROXY" \
             --from-literal=PENNY_LOG_LEVEL="$PENNY_LOG_LEVEL" \

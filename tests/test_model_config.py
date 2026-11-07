@@ -1,0 +1,27 @@
+import os
+import unittest
+from unittest.mock import patch
+
+from penny.service import DEFAULT_MODEL, DEFAULT_MODEL_BASE_URL, Model, model_settings
+
+
+class ModelSettingsTest(unittest.TestCase):
+    def test_defaults(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(model_settings(),
+                             ("", DEFAULT_MODEL, DEFAULT_MODEL_BASE_URL))
+
+    def test_new_names(self):
+        env = {"MODEL_API_KEY": "new", "MODEL_NAME": "glm-4.7-flash",
+               "MODEL_BASE_URL": "https://api.z.ai/api/paas/v4/"}
+        with patch.dict(os.environ, env, clear=True):
+            self.assertEqual(model_settings(),
+                             ("new", "glm-4.7-flash", "https://api.z.ai/api/paas/v4"))
+
+    def test_model_uses_configured_base_url(self):
+        model = Model("key", "glm-4.7-flash", "https://api.z.ai/api/paas/v4/")
+        self.assertEqual(model.base_url, "https://api.z.ai/api/paas/v4")
+
+
+if __name__ == "__main__":
+    unittest.main()

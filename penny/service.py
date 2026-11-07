@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from dataclasses import dataclass
 from decimal import Decimal
@@ -262,9 +263,26 @@ def resolve_intent(raw, message, previous=None):
                         result_aggregation, info_topic, conversation_kind)
 
 
+DEFAULT_MODEL = "deepseek-flash"
+DEFAULT_MODEL_BASE_URL = "https://api.deepseek.com"
+
+
+def model_settings(environ=None):
+    """Return (key, model, base_url) for the configured OpenAI-compatible API.
+
+    The base URL must not include /chat/completions.
+    """
+    env = os.environ if environ is None else environ
+    key = env.get("MODEL_API_KEY") or ""
+    name = env.get("MODEL_NAME") or DEFAULT_MODEL
+    base_url = (env.get("MODEL_BASE_URL") or DEFAULT_MODEL_BASE_URL).rstrip("/")
+    return key, name, base_url
+
+
 class Model:
-    def __init__(self, key, model):
+    def __init__(self, key, model, base_url=DEFAULT_MODEL_BASE_URL):
         self.key, self.model = key, model
+        self.base_url = base_url.rstrip("/")
 
     async def ask(self, instruction, data, max_tokens=400, temperature=None):
         import asyncio as _aio
@@ -280,7 +298,7 @@ class Model:
             response = None
             for attempt in range(2):
                 try:
-                    response = await client.post("https://api.deepseek.com/chat/completions",
+                    response = await client.post(self.base_url + "/chat/completions",
                         headers={"Authorization": "Bearer " + self.key, "Content-Type": "application/json"},
                         content=payload.encode("utf-8"))
                 except httpx.TransportError:
@@ -290,7 +308,7 @@ class Model:
                         continue
                     raise
                 event("model_http", status=response.status_code, attempt=attempt)
-                # DeepSeek intermittently returns 422/5xx for identical payloads; one retry helps.
+                # Some providers intermittently return 422/5xx for identical payloads; one retry helps.
                 if response.status_code in (422, 429, 500, 502, 503, 504) and attempt == 0:
                     await _aio.sleep(1)
                     continue

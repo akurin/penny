@@ -93,7 +93,7 @@ def main():
         address = result.get("address") or "?"
         print(f"Check passed: {len(result['products'])} candidates, store: {address}")
         print("The regular Penny bot now fetches Дикси over HTTP again.")
-    print("No Telegram messages or DeepSeek requests were sent.")
+    print("No Telegram messages or model requests were sent.")
 
 
 if __name__ == "__main__":

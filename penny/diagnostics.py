@@ -60,7 +60,7 @@ def main():
         # Each browser lives on its own mode thread; close them where they run.
         from .browser import close_all_browsers
         close_all_browsers()
-    print("No Telegram messages or DeepSeek requests were sent.")
+    print("No Telegram messages or model requests were sent.")
     if failures:
         raise SystemExit(1)
 

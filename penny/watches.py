@@ -3,7 +3,7 @@
 The scheduler walks active watches least-recently-checked first, searches only
 the watched product's own store, respects store cooldowns, records the
 observation in price history and notifies a drop. It never runs more than
-`PENNY_WATCH_LIMIT` checks per pass and never touches DeepSeek.
+`PENNY_WATCH_LIMIT` checks per pass and never touches the model.
 """
 import asyncio
 import functools
