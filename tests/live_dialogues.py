@@ -1,7 +1,7 @@
 """Real-model conversational regression without Telegram or store requests.
 
 Run: ./scripts/uv run --locked python -m tests.live_dialogues
-Uses DeepSeek, but synthetic products and local session state keep the run cheap and
+Uses the configured model, but synthetic products and local session state keep the run cheap and
 deterministic with respect to stores.
 """
 import asyncio
@@ -11,7 +11,7 @@ import sys
 from dotenv import load_dotenv
 
 from penny.bot import conversation_answer, session_answer
-from penny.service import Model
+from penny.service import Model, model_settings
 
 
 HARRIS_PRODUCTS = [
@@ -324,11 +324,11 @@ async def run_selection_check(model):
 
 async def main():
     load_dotenv(".env")
-    key = os.environ.get("DEEPSEEK_API_KEY")
+    key, model_name, base_url, model_proxy = model_settings()
     if not key:
-        print("SKIP: DEEPSEEK_API_KEY missing")
+        print("SKIP: MODEL_API_KEY missing")
         return 0
-    model = Model(key, os.environ.get("DEEPSEEK_MODEL", "deepseek-flash"))
+    model = Model(key, model_name, base_url, model_proxy)
     rounds = max(1, int(os.environ.get("PENNY_DIALOGUE_ROUNDS", "1")))
     verbose = os.environ.get("PENNY_DIALOGUE_VERBOSE") == "1"
     failed = 0

@@ -3,7 +3,7 @@
     kubectl -n penny exec deploy/penny -- /app/.venv/bin/python -m penny.simulate "хлеб"
 
 The environment is inherited from the container's own process (PID 1), so the
-proxy, the DeepSeek key and the store config are exactly the bot's; pass
+proxy, the model key and the store config are exactly the bot's; pass
 variables on the command line to override. Nothing is sent to Telegram and no
 history is written, so agents can exercise intent parsing, the store round, the
 selection model and the rendered reply on demand.
@@ -12,14 +12,14 @@ import asyncio
 import os
 import sys
 
-INHERITED = ("STORE_PROXY", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL",
-             "PENNY_STORES_CONFIG", "PENNY_STORE_DEADLINE", "PENNY_LOG_LEVEL",
-             "PENNY_LOG_CONTENT")
+INHERITED = ("STORE_PROXY", "MODEL_API_KEY", "MODEL_NAME", "MODEL_BASE_URL",
+             "MODEL_PROXY", "PENNY_STORES_CONFIG", "PENNY_STORE_DEADLINE",
+             "PENNY_LOG_LEVEL", "PENNY_LOG_CONTENT")
 
 
 def _inherit_env():
     """Pick up the bot's settings from PID 1 when kubectl exec gave none."""
-    if os.getenv("STORE_PROXY") and os.getenv("DEEPSEEK_API_KEY"):
+    if os.getenv("STORE_PROXY") and os.getenv("MODEL_API_KEY"):
         return
     try:
         with open("/proc/1/environ", "rb") as handle:
@@ -45,12 +45,13 @@ def _counts(products):
 async def run(text):
     from .logging_setup import configure
     from .research import research
-    from .service import Model
+    from .service import Model, model_settings
     from .store_config import load_store_config
 
     load_store_config()
     configure()
-    model = Model(os.environ["DEEPSEEK_API_KEY"], os.getenv("DEEPSEEK_MODEL", "deepseek-flash"))
+    key, model_name, base_url, model_proxy = model_settings()
+    model = Model(key, model_name, base_url, model_proxy)
     intent = await model.interpret(text)
     print(f"intent: route={intent.route} query={intent.query!r} "
           f"sort={intent.sort} budget={intent.budget}", flush=True)
@@ -75,7 +76,7 @@ def main(argv=None):
         print('usage: python -m penny.simulate "<request>"', file=sys.stderr)
         return 2
     _inherit_env()
-    missing = [name for name in ("STORE_PROXY", "DEEPSEEK_API_KEY") if not os.getenv(name)]
+    missing = [name for name in ("STORE_PROXY", "MODEL_API_KEY") if not os.getenv(name)]
     if missing:
         print(f"missing environment: {', '.join(missing)}", file=sys.stderr)
         return 2

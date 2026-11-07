@@ -78,10 +78,12 @@ Normal runs use `--locked` so they fail rather than silently changing the lockfi
 
 Create a Telegram bot with BotFather and put its token in `.env`. Set
 ALLOWED_USER_IDS to your and your wife's numeric Telegram IDs (not usernames).
-Set DEEPSEEK_API_KEY and STORE_PROXY. Never commit or share `.env`.
-STORE_PROXY carries store requests (`socks5h` keeps DNS at the proxy). Telegram
-and DeepSeek use the normal network connection; set TELEGRAM_PROXY to send Bot
-API calls through a SOCKS5 proxy when `api.telegram.org` is filtered.
+Set MODEL_API_KEY and STORE_PROXY. Never commit or share `.env`.
+STORE_PROXY carries store requests (`socks5h` keeps DNS at the proxy). Set
+TELEGRAM_PROXY to send Bot API calls through a SOCKS5 proxy when
+`api.telegram.org` is filtered. Model calls use the normal network unless
+MODEL_PROXY is set; use it when the provider is blocked (for example OpenRouter
+from Russia). All three proxies may be SOCKS5 or HTTP(S).
 No incoming port is needed for polling.
 Keep the process running on a machine that stays up; only one polling instance
 per bot.
@@ -91,6 +93,50 @@ products from the available stores with their prices, a store label per card, an
 search link per store. Out-of-stock items are hidden instead of shown as
 unavailable. Links are explicitly search links, not invented product URLs.
 Try an unrelated Telegram account: it should receive no reply.
+
+## Model provider
+
+Penny uses any OpenAI-compatible chat-completions API. The defaults keep
+DeepSeek working; set these to switch:
+
+| Variable | DeepSeek default | GLM-4.7-Flash example |
+|---|---|---|
+| `MODEL_API_KEY` | your DeepSeek key | your Z.AI / BigModel key |
+| `MODEL_NAME` | `deepseek-flash` | `glm-4.7-flash` |
+| `MODEL_BASE_URL` | `https://api.deepseek.com` | `https://api.z.ai/api/paas/v4` |
+| `MODEL_PROXY` | empty (direct) | optional SOCKS5/HTTP proxy |
+
+`MODEL_BASE_URL` is the API root, without `/chat/completions`.
+`MODEL_PROXY` is optional and applies only to model calls. It accepts
+`socks5://`, `socks5h://`, `http://` and `https://` URLs, with optional
+credentials. Use a proxy with a non-Russian exit for OpenRouter from Russia;
+the store proxy usually exits in Russia and is not a substitute.
+
+For GLM-4.7-Flash, use `https://api.z.ai/api/paas/v4` with an international
+(z.ai) key, or `https://open.bigmodel.cn/api/paas/v4` with a BigModel (China)
+key. The two accounts and their keys are not interchangeable. Penny sends
+`thinking: {"type": "disabled"}` and `response_format: {"type": "json_object"}`,
+both supported by GLM-4.7-Flash.
+
+### OpenRouter
+
+OpenRouter uses the same three variables:
+
+```sh
+MODEL_API_KEY=sk-or-v1-...
+MODEL_NAME=z-ai/glm-4.7-flash
+MODEL_BASE_URL=https://openrouter.ai/api/v1
+# Optional: a SOCKS5/HTTP proxy with a non-Russian exit.
+MODEL_PROXY=socks5h://127.0.0.1:1080
+```
+
+When the base URL host is `openrouter.ai`, Penny sends OpenRouter's normalized
+`reasoning: {"enabled": false}` instead of the provider-native `thinking`
+field, and sets `provider.require_parameters` so routing only selects providers
+that support JSON mode and that reasoning flag. This keeps the whole token
+budget for the answer; GLM-4.7-Flash otherwise reasons by default and can return
+empty content at Penny's 400/1000-token limits. OpenRouter requests are billed to
+your OpenRouter balance, not to Z.AI directly.
 
 ## Local store configuration
 
@@ -109,9 +155,9 @@ of showing prices for another branch.
 
 ## Boundaries and costs
 
-Each accepted question permits at most three DeepSeek calls, capped at 400
+Each accepted question permits at most three model calls, capped at 400
 output tokens (1000 for product selection), and a bounded store-research window
-across five stores. DeepSeek calls retry once on transient 422/429/5xx; the Dixy
+across five stores. Model calls retry once on transient 422/429/5xx; the Dixy
 HTTP transport retries its own listing request. Price budgets
 («до 200 рублей») are parsed by the model and enforced in code: items above the
 budget never render. At startup Penny
@@ -120,10 +166,10 @@ curl-impersonate build lacked the GlobalSign Root R46 that Dixy uses.
 No unbounded retries, paid web research, browser fallback, or arbitrary tools.
 One in-flight question per user, with a ten-second minimum interval.
 Telegram sends retry once on TelegramNetworkError (a 20-second blip used to
-turn an answered request into a false DeepSeek failure message).
+turn an answered request into a false model failure message).
 Unsupported queries clear the cooldown; busy and cooldown rejections are logged
 and have distinct replies (including remaining seconds for a cooldown). Use a small
-prepaid DeepSeek balance; there is no monthly monetary cap in this stage.
+prepaid model balance; there is no monthly monetary cap in this stage.
 Model and product-selection errors produce a generic failure, never guessed
 prices. Search results are capped at 36 candidates and five displayed matches;
 no exhaustive cheapest-price claim is made. Card requirements are shown when
@@ -157,14 +203,14 @@ checks during normal lookups, active watches are checked in the background every
 three hours (`PENNY_WATCH_INTERVAL`, `0` disables; `PENNY_WATCH_START_DELAY`,
 `PENNY_WATCH_LIMIT`): Penny searches only the watched product's own store, skips
 stores in a cooldown, records the observation in price history and messages a drop —
-no DeepSeek, at most 20 products per pass. `/unwatch` lists subscriptions with
+no model calls, at most 20 products per pass. `/unwatch` lists subscriptions with
 remove buttons; `/watch 2` and `/history 2` still work if you prefer typing. The
 commands are registered with Telegram, so they appear in the chat's «/» menu instead
 of having to be memorised.
 
 SQLite stores the numeric allowed-user ID, the self-contained shopping request,
 and store observations. Operational events are logged by default; conversation content is opt-in
-(see below). User queries and candidate products are sent to DeepSeek. Private chats only.
+(see below). User queries and candidate products are sent to the model provider. Private chats only.
 The model never writes prices into replies: Python renders validated store data.
 Product sizes appear in names when supplied; unambiguous unit prices are compared.
 
@@ -208,7 +254,7 @@ Import helpers from their owning modules in new code. The previous imports from
 
 GitHub Actions runs these checks on Linux with Python 3.13.
 Tests use fixtures/mocks and do not spend money or contact stores. A real Telegram,
-DeepSeek and proxy smoke test requires your local credentials.
+model and proxy smoke test requires your local credentials.
 The async tests require local socket-pair writes: asyncio uses them to wake its
 event loop after a worker completes. A sandbox that denies those writes can make
 otherwise completed lookups wait until their deadline; run the offline tests with
@@ -223,7 +269,7 @@ To exercise conversational state against the real model without Telegram or stor
 This runs stateful dialogues across fresh searches, continuations, topic changes,
 budgets, store restrictions, refreshes, result calculations, product information,
 acknowledgements and unsupported messages. It also checks that similarly named products
-do not leak into a brand result. It uses synthetic products and spends only DeepSeek calls.
+do not leak into a brand result. It uses synthetic products and spends only model calls.
 Set `PENNY_DIALOGUE_ROUNDS=3` for repeated stability checks and
 `PENNY_DIALOGUE_VERBOSE=1` to print every turn.
 
@@ -235,10 +281,10 @@ STORE_PROXY=socks5h://127.0.0.1:10807 ./scripts/uv run --locked python -m tests.
 
 Runs a set of real queries (unsupported, foreign store, brand-with-form-word,
 hypoallergenic split, cheapest intent, cross-store brand, out-of-stock, protein
-bars) through the real stores and DeepSeek and checks invariants: query
+bars) through the real stores and the model and checks invariants: query
 extraction, store grouping, footer subset, prices rendered by code, no filler
 phrases, per-section ascending price for cheapest requests. Costs a handful of
-DeepSeek calls and store requests; needs a proxy reachable from the running OS
+model calls and store requests; needs a proxy reachable from the running OS
 (the same STORE_PROXY as the bot).
 
 ## Next agreed stages
@@ -253,7 +299,8 @@ DeepSeek calls and store requests; needs a proxy reachable from the running OS
    normal lookups.
 
 Reference API documentation:
-- https://api-docs.deepseek.com/api/create-chat-completion/
+- https://api-docs.deepseek.com/api/create-chat-completion/ (default provider)
+- https://docs.z.ai/api-reference/llm/chat-completion
 - https://docs.aiogram.dev/en/latest/dispatcher/long_polling.html
 
 ## Diagnose a failed lookup
@@ -264,7 +311,7 @@ Run this in the same OS and shell environment as the bot:
 ./scripts/uv run --locked python -m penny.diagnostics
 ```
 
-It checks only the store via the configured proxy; it does not call DeepSeek or
+It checks only the store via the configured proxy; it does not call the model or
 send Telegram messages. `transport_code=7` means a connection could not be
 established. The proxy address has to be reachable from wherever Penny runs: a
 localhost address works only on the same machine, a VM needs an address

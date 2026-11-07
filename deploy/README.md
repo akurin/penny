@@ -32,7 +32,7 @@ kubectl taint node <node> dedicated=home:NoSchedule
 **Networking caveat.** The agent connects outbound to the server, but k3s's
 default flannel overlay needs UDP 8472 between nodes. A NAT'd node can join and
 still be `Ready`, but cross-node pod traffic may fail. Penny uses the normal pod
-network: it opens no ports and only needs outbound access to Telegram, DeepSeek
+network: it opens no ports and only needs outbound access to Telegram, the model API
 and the proxy, so it must stay pinned to the node that can reach those endpoints.
 Its DNS is pinned to the LAN resolver because the node's `/etc/resolv.conf`
 points at systemd-resolved's `127.0.0.53` stub. If the node never becomes
@@ -55,13 +55,15 @@ Configure these under **Settings → Environments → production** in GitHub:
 | `CI_DEPLOY_SSH_KEY` | key for the `ci-deploy` SSH account |
 | `K3S_HOST` | SSH host reachable from GitHub |
 | `TELEGRAM_BOT_TOKEN` | bot token |
-| `ALLOWED_USER_IDS` | comma-separated numeric IDs |
-| `DEEPSEEK_API_KEY` | model key |
+| `MODEL_API_KEY` | model key |
 | `PENNY_STORES_CONFIG_JSON` | entire contents of the local `config/stores.local.json` file, pasted as one multiline secret |
 
 | Environment variable | Purpose |
 |---|---|
-| `DEEPSEEK_MODEL` | optional; defaults to `deepseek-flash` |
+| `ALLOWED_USER_IDS` | required; comma-separated numeric IDs |
+| `MODEL_NAME` | optional; defaults to `deepseek-flash` |
+| `MODEL_BASE_URL` | optional; defaults to `https://api.deepseek.com`; API root without `/chat/completions` (for OpenRouter use `https://openrouter.ai/api/v1`) |
+| `MODEL_PROXY` | optional; SOCKS5/HTTP proxy for model calls only, needed when the provider is blocked; use an exit outside the blocking region |
 | `STORE_PROXY` | required; credential-free SOCKS5 proxy for store requests, reachable **from the node** (`socks5h://` keeps DNS at the proxy) |
 | `TELEGRAM_PROXY` | optional; SOCKS5 proxy for Bot API calls, when `api.telegram.org` is filtered from the node |
 | `PENNY_LOG_LEVEL` | optional; defaults to `INFO` |
@@ -70,9 +72,9 @@ Configure these under **Settings → Environments → production** in GitHub:
 | `PENNY_TOLERATION` | optional; `key=value:effect` toleration for a tainted (reserved) node, e.g. `dedicated=home:NoSchedule` |
 
 Use **Environment secrets** for the first table and **Environment variables**
-for the second. If the proxy URL ever contains a username or password, move
-`STORE_PROXY` back to an Environment secret and update the workflow reference.
-The workflow validates the JSON and creates/updates
+for the second. If `STORE_PROXY` or `MODEL_PROXY` ever contains a username or
+password, move that value to an Environment secret and update the workflow
+reference. The workflow validates the JSON and creates/updates
 `penny-stores` from it. Keep the file out of Git; the pod mounts the resulting
 Secret at `/app/config/stores.local.json`. The workflow also creates/updates
 `penny-env` for the environment variables. The pod manifest no longer overrides
@@ -147,7 +149,7 @@ kubectl -n penny exec deploy/penny -- /app/.venv/bin/python -m penny.simulate "�
 
 It prints the parsed intent, per-store candidate counts, the notes that would
 appear in the reply, and the rendered answer. The environment is inherited from
-the container's own process, so it uses the same proxy, DeepSeek key and store
+the container's own process, so it uses the same proxy, model key and store
 config; nothing is written to Telegram or to the price history.
 
 ## 6. Node hygiene

@@ -84,9 +84,11 @@ jobs:
           CI_DEPLOY_SSH_KEY: ${{ secrets.CI_DEPLOY_SSH_KEY }}
           K3S_HOST: ${{ secrets.K3S_HOST }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          ALLOWED_USER_IDS: ${{ secrets.ALLOWED_USER_IDS }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-flash' }}
+          ALLOWED_USER_IDS: ${{ vars.ALLOWED_USER_IDS }}
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          MODEL_NAME: ${{ vars.MODEL_NAME || 'deepseek-flash' }}
+          MODEL_BASE_URL: ${{ vars.MODEL_BASE_URL || 'https://api.deepseek.com' }}
+          MODEL_PROXY: ${{ vars.MODEL_PROXY }}
           STORE_PROXY: ${{ vars.STORE_PROXY }}
           TELEGRAM_PROXY: ${{ vars.TELEGRAM_PROXY }}
           PENNY_LOG_LEVEL: ${{ vars.PENNY_LOG_LEVEL || 'INFO' }}
@@ -99,16 +101,18 @@ jobs:
           set -euo pipefail
           umask 077
           for name in CI_DEPLOY_SSH_KEY K3S_HOST TELEGRAM_BOT_TOKEN \
-            ALLOWED_USER_IDS DEEPSEEK_API_KEY PENNY_STORES_CONFIG_JSON; do
+            MODEL_API_KEY PENNY_STORES_CONFIG_JSON; do
             if test -z "${!name}"; then
               echo "Missing production secret: $name" >&2
               exit 1
             fi
           done
-          if test -z "$STORE_PROXY"; then
-            echo "Missing production variable: STORE_PROXY" >&2
-            exit 1
-          fi
+          for name in ALLOWED_USER_IDS STORE_PROXY; do
+            if test -z "${!name}"; then
+              echo "Missing production variable: $name" >&2
+              exit 1
+            fi
+          done
           # Placement is cluster-specific and is rendered into the manifest below.
           if test -z "$PENNY_NODE_SELECTOR" ||
              test "${PENNY_NODE_SELECTOR#*=}" = "$PENNY_NODE_SELECTOR"; then
@@ -129,8 +133,10 @@ jobs:
           kubectl -n penny create secret generic penny-env \
             --from-literal=TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
             --from-literal=ALLOWED_USER_IDS="$ALLOWED_USER_IDS" \
-            --from-literal=DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" \
-            --from-literal=DEEPSEEK_MODEL="$DEEPSEEK_MODEL" \
+            --from-literal=MODEL_API_KEY="$MODEL_API_KEY" \
+            --from-literal=MODEL_NAME="$MODEL_NAME" \
+            --from-literal=MODEL_BASE_URL="$MODEL_BASE_URL" \
+            --from-literal=MODEL_PROXY="$MODEL_PROXY" \
             --from-literal=STORE_PROXY="$STORE_PROXY" \
             --from-literal=TELEGRAM_PROXY="$TELEGRAM_PROXY" \
             --from-literal=PENNY_LOG_LEVEL="$PENNY_LOG_LEVEL" \

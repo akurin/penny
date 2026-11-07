@@ -17,7 +17,7 @@ from aiogram.exceptions import TelegramNetworkError
 from .store import DIXY_STATE_PATH
 from .products import unit_price
 from .rendering import reply_chunks, money
-from .service import Model
+from .service import Model, model_settings
 from .research import research
 from .telegram_connection import wait_for_telegram, PollingHealth
 from .logging_setup import configure, request_id, event, content, failure, span
@@ -245,13 +245,16 @@ async def run():
     ensure_ca_bundle()
     configure()
     event("stores_config", loaded=configured)
-    required = ("TELEGRAM_BOT_TOKEN", "ALLOWED_USER_IDS", "DEEPSEEK_API_KEY", "STORE_PROXY")
+    required = ("TELEGRAM_BOT_TOKEN", "ALLOWED_USER_IDS", "STORE_PROXY")
     if any(not os.getenv(key) for key in required):
         raise SystemExit("Fill required settings in .env; see .env.example")
+    key, model_name, base_url, model_proxy = model_settings()
+    if not key:
+        raise SystemExit("Fill MODEL_API_KEY in .env; see .env.example")
     ids = {int(value.strip()) for value in os.environ["ALLOWED_USER_IDS"].split(",")}
     if len(ids) > 2 or any(i <= 0 for i in ids):
         raise SystemExit("Configure one or two positive Telegram user IDs")
-    model = Model(os.environ["DEEPSEEK_API_KEY"], os.getenv("DEEPSEEK_MODEL", "deepseek-flash"))
+    model = Model(key, model_name, base_url, model_proxy)
     try:
         memory = Memory()
     except Exception as exc:
@@ -646,7 +649,7 @@ async def run():
             elif stage == "store":
                 reason = "Не удалось получить данные магазинов. Проверьте подключение к прокси и повторите запрос."
             elif stage in ("query", "selection"):
-                reason = "Не удалось обработать запрос через DeepSeek. Попробуйте позже."
+                reason = "Не удалось обработать запрос через модель. Попробуйте позже."
             else:
                 reason = "Не удалось отправить результат. Попробуйте позже."
             try:
