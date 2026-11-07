@@ -324,11 +324,11 @@ async def run_selection_check(model):
 
 async def main():
     load_dotenv(".env")
-    key, model_name, base_url = model_settings()
+    key, model_name, base_url, model_proxy = model_settings()
     if not key:
         print("SKIP: MODEL_API_KEY missing")
         return 0
-    model = Model(key, model_name, base_url)
+    model = Model(key, model_name, base_url, model_proxy)
     rounds = max(1, int(os.environ.get("PENNY_DIALOGUE_ROUNDS", "1")))
     verbose = os.environ.get("PENNY_DIALOGUE_VERBOSE") == "1"
     failed = 0

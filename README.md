@@ -79,9 +79,11 @@ Normal runs use `--locked` so they fail rather than silently changing the lockfi
 Create a Telegram bot with BotFather and put its token in `.env`. Set
 ALLOWED_USER_IDS to your and your wife's numeric Telegram IDs (not usernames).
 Set MODEL_API_KEY and STORE_PROXY. Never commit or share `.env`.
-STORE_PROXY carries store requests (`socks5h` keeps DNS at the proxy). Telegram
-and the model API use the normal network connection; set TELEGRAM_PROXY to send Bot
-API calls through a SOCKS5 proxy when `api.telegram.org` is filtered.
+STORE_PROXY carries store requests (`socks5h` keeps DNS at the proxy). Set
+TELEGRAM_PROXY to send Bot API calls through a SOCKS5 proxy when
+`api.telegram.org` is filtered. Model calls use the normal network unless
+MODEL_PROXY is set; use it when the provider is blocked (for example OpenRouter
+from Russia). All three proxies may be SOCKS5 or HTTP(S).
 No incoming port is needed for polling.
 Keep the process running on a machine that stays up; only one polling instance
 per bot.
@@ -102,8 +104,13 @@ DeepSeek working; set these to switch:
 | `MODEL_API_KEY` | your DeepSeek key | your Z.AI / BigModel key |
 | `MODEL_NAME` | `deepseek-flash` | `glm-4.7-flash` |
 | `MODEL_BASE_URL` | `https://api.deepseek.com` | `https://api.z.ai/api/paas/v4` |
+| `MODEL_PROXY` | empty (direct) | optional SOCKS5/HTTP proxy |
 
 `MODEL_BASE_URL` is the API root, without `/chat/completions`.
+`MODEL_PROXY` is optional and applies only to model calls. It accepts
+`socks5://`, `socks5h://`, `http://` and `https://` URLs, with optional
+credentials. Use a proxy with a non-Russian exit for OpenRouter from Russia;
+the store proxy usually exits in Russia and is not a substitute.
 
 For GLM-4.7-Flash, use `https://api.z.ai/api/paas/v4` with an international
 (z.ai) key, or `https://open.bigmodel.cn/api/paas/v4` with a BigModel (China)
@@ -119,6 +126,8 @@ OpenRouter uses the same three variables:
 MODEL_API_KEY=sk-or-v1-...
 MODEL_NAME=z-ai/glm-4.7-flash
 MODEL_BASE_URL=https://openrouter.ai/api/v1
+# Optional: a SOCKS5/HTTP proxy with a non-Russian exit.
+MODEL_PROXY=socks5h://127.0.0.1:1080
 ```
 
 When the base URL host is `openrouter.ai`, Penny sends OpenRouter's normalized

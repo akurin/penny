@@ -248,13 +248,13 @@ async def run():
     required = ("TELEGRAM_BOT_TOKEN", "ALLOWED_USER_IDS", "STORE_PROXY")
     if any(not os.getenv(key) for key in required):
         raise SystemExit("Fill required settings in .env; see .env.example")
-    key, model_name, base_url = model_settings()
+    key, model_name, base_url, model_proxy = model_settings()
     if not key:
         raise SystemExit("Fill MODEL_API_KEY in .env; see .env.example")
     ids = {int(value.strip()) for value in os.environ["ALLOWED_USER_IDS"].split(",")}
     if len(ids) > 2 or any(i <= 0 for i in ids):
         raise SystemExit("Configure one or two positive Telegram user IDs")
-    model = Model(key, model_name, base_url)
+    model = Model(key, model_name, base_url, model_proxy)
     try:
         memory = Memory()
     except Exception as exc:

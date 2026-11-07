@@ -269,21 +269,24 @@ DEFAULT_MODEL_BASE_URL = "https://api.deepseek.com"
 
 
 def model_settings(environ=None):
-    """Return (key, model, base_url) for the configured OpenAI-compatible API.
+    """Return (key, model, base_url, proxy) for the configured API.
 
-    The base URL must not include /chat/completions.
+    The base URL must not include /chat/completions. proxy is optional and may
+    be a socks5://, socks5h://, http:// or https:// URL.
     """
     env = os.environ if environ is None else environ
     key = env.get("MODEL_API_KEY") or ""
     name = env.get("MODEL_NAME") or DEFAULT_MODEL
     base_url = (env.get("MODEL_BASE_URL") or DEFAULT_MODEL_BASE_URL).rstrip("/")
-    return key, name, base_url
+    proxy = env.get("MODEL_PROXY") or ""
+    return key, name, base_url, proxy
 
 
 class Model:
-    def __init__(self, key, model, base_url=DEFAULT_MODEL_BASE_URL):
+    def __init__(self, key, model, base_url=DEFAULT_MODEL_BASE_URL, proxy=None):
         self.key, self.model = key, model
         self.base_url = base_url.rstrip("/")
+        self.proxy = proxy or None
         # OpenRouter normalizes reasoning controls; the provider-native
         # "thinking" field is not part of its Chat Completions schema.
         self.openrouter = urlparse(self.base_url).netloc.lower().removeprefix("www.") == "openrouter.ai"
@@ -310,7 +313,7 @@ class Model:
         import asyncio as _aio
         request = self._payload(instruction, data, max_tokens, temperature)
         payload = json.dumps(request, ensure_ascii=False)
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, proxy=self.proxy) as client:
             response = None
             for attempt in range(2):
                 try:

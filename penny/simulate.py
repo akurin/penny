@@ -13,8 +13,8 @@ import os
 import sys
 
 INHERITED = ("STORE_PROXY", "MODEL_API_KEY", "MODEL_NAME", "MODEL_BASE_URL",
-             "PENNY_STORES_CONFIG", "PENNY_STORE_DEADLINE", "PENNY_LOG_LEVEL",
-             "PENNY_LOG_CONTENT")
+             "MODEL_PROXY", "PENNY_STORES_CONFIG", "PENNY_STORE_DEADLINE",
+             "PENNY_LOG_LEVEL", "PENNY_LOG_CONTENT")
 
 
 def _inherit_env():
@@ -50,8 +50,8 @@ async def run(text):
 
     load_store_config()
     configure()
-    key, model_name, base_url = model_settings()
-    model = Model(key, model_name, base_url)
+    key, model_name, base_url, model_proxy = model_settings()
+    model = Model(key, model_name, base_url, model_proxy)
     intent = await model.interpret(text)
     print(f"intent: route={intent.route} query={intent.query!r} "
           f"sort={intent.sort} budget={intent.budget}", flush=True)

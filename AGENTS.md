@@ -22,7 +22,8 @@ the operational details that are easy to rediscover the hard way.
   jump host. Do not run browsers or other heavy work on the control plane;
   exec into the Penny pod for production-path tests.
 - Store traffic uses the pod's `STORE_PROXY`; Telegram uses `TELEGRAM_PROXY`.
-  They are SOCKS endpoints on x13 and are not directly reachable from the VM.
+  Model calls use `MODEL_PROXY` when set. The store and Telegram proxies are
+  SOCKS endpoints on x13 and are not directly reachable from the VM.
   Do not assume `127.0.0.1` or the Mac's LAN is the same network.
 - Source IP matters to Qrator, ServicePipe and SmartCaptcha. The VM's direct
   egress can be a Cloudflare/WARP exit, so a failure from the VM says nothing

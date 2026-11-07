@@ -16,7 +16,8 @@ logger = logging.getLogger("penny")
 
 def redact(value):
     text = str(value)
-    for key in ("TELEGRAM_BOT_TOKEN", "MODEL_API_KEY", "STORE_PROXY", "TELEGRAM_PROXY"):
+    for key in ("TELEGRAM_BOT_TOKEN", "MODEL_API_KEY", "MODEL_PROXY",
+                "STORE_PROXY", "TELEGRAM_PROXY"):
         secret = os.getenv(key)
         if secret:
             text = text.replace(secret, "[REDACTED]")

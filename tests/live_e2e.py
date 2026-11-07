@@ -212,11 +212,11 @@ GROUND_TRUTH = [
 async def main():
     load_dotenv(".env")
     proxy = os.environ.get("STORE_PROXY")
-    key, model_name, base_url = model_settings()
+    key, model_name, base_url, model_proxy = model_settings()
     if not proxy or not key:
         print("SKIP: STORE_PROXY / MODEL_API_KEY missing")
         return 0
-    model = Model(key, model_name, base_url)
+    model = Model(key, model_name, base_url, model_proxy)
     results = await asyncio.gather(
         *(pipeline(model, proxy, case["text"]) for case in CASES),
         return_exceptions=True)
