@@ -263,6 +263,7 @@ def fiveka_browser_search(query, proxy=None, store=None):
     with _site_lock("5ka"):
         browser = get_browser("5ka")
         context = _persistent_context(browser, "5ka")
+        started = time.time()
         try:
             deadline = _deadline(FIVEKA_DEADLINE_S)
             page = context.pages[0] if context.pages else context.new_page()
@@ -278,11 +279,18 @@ def fiveka_browser_search(query, proxy=None, store=None):
                    f"?mode=delivery&include_restrict=true&q={quote(query)}")
             data = None
             polls = 0
+            last_status = None
             while time.time() < deadline:
                 res = _evaluate_retrying(page, FIVEKA_FETCH, url, deadline, 250)
-                if res and res["status"] == 200:
+                status = res.get("status") if isinstance(res, dict) else None
+                if status == 200:
                     data = json.loads(res["body"])
                     break
+                if status in (401, 403, 429):
+                    blocked = ServiceBlocked("5ka catalog rejected")
+                    blocked.http_status = status
+                    raise blocked
+                last_status = status
                 polls += 1
                 if polls % 8 == 0:
                     if _fiveka_blocked(page):
@@ -292,6 +300,8 @@ def fiveka_browser_search(query, proxy=None, store=None):
                                   timeout=_timeout_ms(deadline))
                 page.wait_for_timeout(250)
             if data is None:
+                event("fiveka_failed", http_status=last_status, polls=polls,
+                      seconds=round(time.time() - started, 1))
                 raise ValueError(
                     f"5ka catalog fetch did not return 200 within {FIVEKA_DEADLINE_S}s")
             products = _normalize_5ka(data)
@@ -306,9 +316,11 @@ def fiveka_browser_search(query, proxy=None, store=None):
             event("browser_search", site="5ka", candidates=len(products))
             return result
         except Exception:
-            # Never keep a blocked or challenged page: the next search (after the
-            # cooldown) must start from a clean context, not replay the failure.
+            # A challenged browser fingerprint can keep failing after its page
+            # and context are replaced. The next search needs a new process.
             _drop_context("5ka")
+            _close_one(_browser_key(headless_mode("5ka")))
+            event("fiveka_browser_reset", seconds=round(time.time() - started, 1))
             raise
 
 

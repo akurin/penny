@@ -13,11 +13,12 @@ from penny.browser import (
     _normalize_5ka,
     _normalize_lenta,
     _verify_lenta_store,
+    fiveka_browser_search,
     lenta_browser_search,
     shared_headless_mode,
     get_browser,
 )
-from penny.store import LentaBlocked
+from penny.store import LentaBlocked, ServiceBlocked
 
 
 class Page:
@@ -125,6 +126,52 @@ class BrowserTests(unittest.TestCase):
 
         self.assertTrue(_fiveka_blocked(Page(True)))
         self.assertFalse(_fiveka_blocked(Page(False)))
+
+    def test_fiveka_hard_rejection_stops_and_resets_browser(self):
+        class SearchPage:
+            url = "https://5ka.ru/"
+
+        page = SearchPage()
+
+        class Context:
+            pages = [page]
+
+        with patch("penny.browser.get_browser", return_value=object()), \
+                patch("penny.browser._persistent_context", return_value=Context()), \
+                patch("penny.browser._fiveka_blocked", return_value=False), \
+                patch("penny.browser._evaluate_retrying", return_value={"status": 403}) as fetch, \
+                patch("penny.browser._drop_context") as drop, \
+                patch("penny.browser._close_one") as close, \
+                patch("penny.browser.event"):
+            with self.assertRaises(ServiceBlocked) as raised:
+                fiveka_browser_search("хлеб", store="test")
+
+        self.assertEqual(raised.exception.http_status, 403)
+        fetch.assert_called_once()
+        drop.assert_called_once_with("5ka")
+        close.assert_called_once_with("headless")
+
+    def test_fiveka_catalog_timeout_resets_browser(self):
+        class SearchPage:
+            url = "https://5ka.ru/"
+
+        page = SearchPage()
+
+        class Context:
+            pages = [page]
+
+        with patch("penny.browser.get_browser", return_value=object()), \
+                patch("penny.browser._persistent_context", return_value=Context()), \
+                patch("penny.browser._fiveka_blocked", return_value=False), \
+                patch("penny.browser._deadline", return_value=0), \
+                patch("penny.browser._drop_context") as drop, \
+                patch("penny.browser._close_one") as close, \
+                patch("penny.browser.event"):
+            with self.assertRaisesRegex(ValueError, "catalog fetch did not return 200"):
+                fiveka_browser_search("хлеб", store="test")
+
+        drop.assert_called_once_with("5ka")
+        close.assert_called_once_with("headless")
 
     def test_persistent_context_is_reused_between_searches(self):
         from penny.browser import _persistent_context, _site_contexts
